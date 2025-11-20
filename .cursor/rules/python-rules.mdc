@@ -1,0 +1,38 @@
+---
+title: "Olympus Transcriber - Python Standards"
+description: "Python coding standards for this project"
+globs: "src/**/*.py"
+alwaysApply: true
+---
+
+# Coding Standards
+
+- Use type hints for all function parameters and returns
+- Follow PEP 8 strictly
+- Maximum line length: 88 characters (Black style)
+- Use docstrings for all functions (Google style)
+- All functions should be testable
+- Use logging instead of print()
+- Never use global variables (use classes)
+
+# Project-specific
+
+- Imports order: stdlib → third-party → local
+- Use `from src.logger import logger` for logging
+- Use `from src.config import config` for configuration
+- All file I/O must handle exceptions
+- All subprocess calls must have timeout
+
+# Testing
+
+- Write tests before implementation (TDD)
+- Use pytest
+- All public functions must have tests
+- Use fixtures for common setup
+
+# Error Handling
+
+- Always use try-except for file operations
+- Log all errors with appropriate level
+- Graceful degradation - continue on non-critical errors
+- Timeout protection on all long-running operations

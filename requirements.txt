@@ -1,0 +1,19 @@
+# Production dependencies
+MacFSEvents>=0.8.4
+pyobjc-framework-Cocoa>=10.0
+pyobjc-framework-FSEvents>=10.0
+
+# Transcription engine
+# whisper.cpp is installed separately via scripts/install_whisper_cpp.sh
+# No Python dependencies required for whisper.cpp
+
+# Logging and utilities
+python-dotenv>=1.0.0
+click>=8.1.0
+
+# LLM/Summarization
+anthropic>=0.8.0
+
+# Audio metadata
+mutagen>=1.47.0
+
