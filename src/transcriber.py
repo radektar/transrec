@@ -6,12 +6,14 @@ import subprocess
 import time
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Callable
 
 from src.config import config
 from src.logger import logger
 from src.summarizer import get_summarizer, BaseSummarizer
 from src.markdown_generator import MarkdownGenerator
+from src.app_status import AppStatus
+from src.state_manager import get_last_sync_time, save_sync_time
 
 
 class Transcriber:
@@ -24,6 +26,7 @@ class Transcriber:
         transcription_in_progress: Track files currently being transcribed
         whisper_available: Flag indicating if Whisper CLI is available
         recorder_monitoring: Flag if recorder is currently connected
+        state_updater: Optional callback to update application state
     """
     
     def __init__(self):
@@ -31,6 +34,7 @@ class Transcriber:
         self.transcription_in_progress: Dict[str, bool] = {}
         self.whisper_available = self._check_whisper()
         self.recorder_monitoring = False
+        self.state_updater: Optional[Callable[[AppStatus, Optional[str], Optional[str]], None]] = None
         
         # Initialize summarizer and markdown generator
         self.summarizer: Optional[BaseSummarizer] = get_summarizer()
@@ -38,6 +42,36 @@ class Transcriber:
         
         # Ensure output directory exists
         config.ensure_directories()
+    
+    def set_state_updater(
+        self,
+        updater: Callable[[AppStatus, Optional[str], Optional[str]], None]
+    ) -> None:
+        """Set callback function for state updates.
+        
+        Args:
+            updater: Function that takes (status, current_file, error_message)
+        """
+        self.state_updater = updater
+    
+    def _update_state(
+        self,
+        status: AppStatus,
+        current_file: Optional[str] = None,
+        error_message: Optional[str] = None
+    ) -> None:
+        """Update application state via callback if available.
+        
+        Args:
+            status: New status
+            current_file: Current file being processed
+            error_message: Error message if status is ERROR
+        """
+        if self.state_updater:
+            try:
+                self.state_updater(status, current_file, error_message)
+            except Exception as e:
+                logger.debug(f"Error updating state: {e}")
     
     def _check_whisper(self) -> bool:
         """Check if whisper.cpp binary and ffmpeg are available.
@@ -105,32 +139,11 @@ class Transcriber:
         Returns:
             Datetime of last sync, or 7 days ago if no state file exists
         """
-        if config.STATE_FILE.exists():
-            try:
-                with open(config.STATE_FILE, 'r') as f:
-                    data = json.load(f)
-                    last_sync_str = data.get("last_sync")
-                    if last_sync_str:
-                        last_sync = datetime.fromisoformat(last_sync_str)
-                        logger.debug(f"Last sync: {last_sync}")
-                        return last_sync
-            except Exception as e:
-                logger.error(f"Error reading state file: {e}")
-        
-        # Default: 7 days ago
-        default_time = datetime.now() - timedelta(days=7)
-        logger.info(f"No previous sync found, using default: {default_time}")
-        return default_time
+        return get_last_sync_time()
     
     def save_sync_time(self) -> None:
         """Save current time as last sync timestamp."""
-        try:
-            current_time = datetime.now()
-            with open(config.STATE_FILE, 'w') as f:
-                json.dump({"last_sync": current_time.isoformat()}, f, indent=2)
-            logger.debug(f"Saved sync time: {current_time}")
-        except Exception as e:
-            logger.error(f"Error saving state file: {e}")
+        save_sync_time()
     
     def find_audio_files(
         self, recorder_path: Path, since: datetime
@@ -265,6 +278,7 @@ class Transcriber:
         
         logger.info(f"🎙️  Starting transcription: {audio_file.name}")
         self.transcription_in_progress[file_id] = True
+        self._update_state(AppStatus.TRANSCRIBING, audio_file.name)
         
         try:
             # Ensure output directory exists
@@ -296,10 +310,14 @@ class Transcriber:
             
             # Check for errors
             if result.returncode != 0:
+                error_msg = f"Transkrypcja nieudana (kod: {result.returncode})"
+                if result.stderr:
+                    error_msg = result.stderr[:200]
                 logger.error(f"✗ Transcription failed: {audio_file.name}")
                 logger.error(f"  Return code: {result.returncode}")
                 if result.stderr:
                     logger.error(f"  Error: {result.stderr[:500]}")
+                self._update_state(AppStatus.ERROR, audio_file.name, error_msg)
                 return None
             
             logger.debug("✓ whisper.cpp process completed, verifying output file...")
@@ -345,22 +363,29 @@ class Transcriber:
                 return None
         
         except subprocess.TimeoutExpired:
+            error_msg = f"Timeout ({config.TRANSCRIPTION_TIMEOUT}s)"
             logger.error(
                 f"✗ Transcription timeout ({config.TRANSCRIPTION_TIMEOUT}s): "
                 f"{audio_file.name}"
             )
+            self._update_state(AppStatus.ERROR, audio_file.name, error_msg)
             return None
         
         except Exception as e:
+            error_msg = str(e)[:200]
             logger.error(
                 f"✗ Error transcribing {audio_file.name}: {e}",
                 exc_info=True
             )
+            self._update_state(AppStatus.ERROR, audio_file.name, error_msg)
             return None
         
         finally:
             # Remove from in-progress tracking
             self.transcription_in_progress.pop(file_id, None)
+            # Reset state if no more files in progress
+            if not self.transcription_in_progress:
+                self._update_state(AppStatus.IDLE)
     
     def _postprocess_transcript(
         self, audio_file: Path, transcript_path: Path
@@ -563,12 +588,14 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
         """
         logger.info("=" * 60)
         logger.info("🔍 Checking for recorder...")
+        self._update_state(AppStatus.SCANNING)
         
         # Find recorder
         recorder = self.find_recorder()
         if not recorder:
             logger.info("❌ Recorder not found")
             self.recorder_monitoring = False
+            self._update_state(AppStatus.IDLE)
             return
         
         logger.info(f"✓ Recorder detected: {recorder}")
@@ -603,4 +630,5 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
         self.save_sync_time()
         logger.info("✓ Sync complete")
         logger.info("=" * 60)
+        self._update_state(AppStatus.IDLE)
 

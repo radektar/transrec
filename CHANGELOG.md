@@ -210,6 +210,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recommended development workflow to use helper scripts when
   reprocessing historical recordings
 
+## [1.5.0] - 2025-11-20
+
+### Added
+- macOS menu bar application (tray app) for GUI-based operation
+- Thread-safe application state management (`AppState`, `AppStatus`)
+- Python API for state management (`state_manager.py`)
+  - `reset_state()` - Reset transcription memory to specific date
+  - `get_last_sync_time()` - Read last sync timestamp
+  - `save_sync_time()` - Save current sync timestamp
+- Real-time status display in menu bar (idle, scanning, transcribing, error)
+- Menu actions:
+  - Open logs in default editor
+  - Reset memory from GUI
+  - Graceful shutdown
+- Status updates every 2 seconds in tray app
+- Automatic state updates during transcription workflow
+
+### Changed
+- Refactored `OlympusTranscriber` class from `main.py` to `app_core.py`
+- `Transcriber` now supports state update callbacks
+- State management functions moved to dedicated `state_manager.py` module
+- `main.py` now imports and uses `app_core.OlympusTranscriber`
+
+### Dependencies
+- Added `rumps>=0.4.0` for macOS menu bar interface
+
+### Technical Details
+- Menu app runs `OlympusTranscriber` in background thread
+- State updates are thread-safe using locks
+- State manager creates automatic backups before reset
+- Menu app provides notifications for user actions
+
 ## [Unreleased]
 
 ### Planned Features
@@ -240,6 +272,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.5.0** (2025-11-20) - macOS menu bar app with real-time status and GUI controls
+- **1.4.1** (2025-11-20) - Helper scripts for memory reset workflow
 - **1.4.0** (2025-11-20) - Markdown output with Claude AI summarization
 - **1.3.0** (2025-11-20) - whisper.cpp integration with Core ML support
 - **1.2.1** (2025-11-19) - MPS compatibility fix with automatic CPU fallback

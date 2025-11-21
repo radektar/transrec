@@ -147,6 +147,23 @@ Konfiguracja znajduje się w `src/config.py`:
 
 ## 📝 Użycie
 
+### Tryb Tray App (Zalecane)
+
+Aplikacja może działać jako aplikacja w pasku menu macOS z widocznym interfejsem:
+
+```bash
+source venv/bin/activate
+python src/menu_app.py
+```
+
+**Funkcje tray app:**
+- Status w czasie rzeczywistym (Oczekiwanie / Skanowanie / Przetwarzanie)
+- Otwieranie logów jednym kliknięciem
+- Reset pamięci z interfejsu graficznego
+- Powiadomienia o zakończeniu operacji
+
+Po uruchomieniu, aplikacja pojawi się w pasku menu (obok zegara). Kliknij ikonę, aby zobaczyć menu z opcjami.
+
 ### Automatyczny tryb (LaunchAgent)
 
 Po instalacji przez `setup.sh`, aplikacja działa w tle automatycznie:

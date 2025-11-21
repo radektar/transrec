@@ -84,6 +84,16 @@ source ~/.zshrc
 
 ### 5. Test lokalny
 
+**Opcja A: Tray App (Zalecane - z interfejsem graficznym)**
+
+```bash
+python src/menu_app.py
+```
+
+Aplikacja pojawi się w pasku menu macOS. Kliknij ikonę, aby zobaczyć status i opcje.
+
+**Opcja B: Tryb daemon (CLI)**
+
 ```bash
 make run
 ```

@@ -195,6 +195,61 @@ Brak built-in retry - każde podłączenie recordera:
 - Jeśli transkrypcja failnęła poprzednio, spróbuje znowu
 - Jeśli succeedła, zostaje w Documents/
 
+## UI Layer (Menu Bar App)
+
+### Menu App Architecture
+
+Since version 1.5.0, the application includes a macOS menu bar interface:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  macOS Menu Bar                                             │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  OlympusMenuApp (src/menu_app.py)                   │  │
+│  │  - rumps-based menu bar interface                    │  │
+│  │  - Status display                                    │  │
+│  │  - Menu actions (logs, reset, quit)                 │  │
+│  └───────────────────┬──────────────────────────────────┘  │
+│                      │                                       │
+│  ┌──────────────────┴──────────────────────────────────┐  │
+│  │  OlympusTranscriber (src/app_core.py)                │  │
+│  │  - Core daemon logic                                  │  │
+│  │  - Thread-safe state management                       │  │
+│  │  - FSEvents + Periodic monitoring                     │  │
+│  └───────────────────┬──────────────────────────────────┘  │
+│                      │                                       │
+│  ┌──────────────────┴──────────────────────────────────┐  │
+│  │  Transcriber (src/transcriber.py)                     │  │
+│  │  - Transcription workflow                              │  │
+│  │  - State updates via callback                          │  │
+│  └──────────────────────────────────────────────────────┘  │
+```
+
+**Key Components:**
+
+1. **AppState** (`src/app_core.py`)
+   - Thread-safe state container
+   - Status: IDLE, SCANNING, TRANSCRIBING, ERROR
+   - Current file tracking
+   - Error message storage
+
+2. **State Manager** (`src/state_manager.py`)
+   - Python API for state file management
+   - `reset_state()` - Reset last_sync date
+   - `get_last_sync_time()` - Read state
+   - `save_sync_time()` - Write state
+
+3. **Menu App** (`src/menu_app.py`)
+   - rumps-based macOS menu bar app
+   - Runs `OlympusTranscriber` in background thread
+   - Updates status every 2 seconds
+   - Provides GUI for common operations
+
+**Usage:**
+- CLI mode: `python src/main.py` (original daemon)
+- Tray app: `python src/menu_app.py` (with GUI)
+
 ## Future Extensions
 
 ### Planned Improvements
