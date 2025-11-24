@@ -65,9 +65,7 @@ stop-daemon:
 
 reload-daemon:
 	@echo "Reloading LaunchAgent..."
-	launchctl unload ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
-	launchctl load ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
-	@echo "Reloaded!"
+	bash scripts/restart_daemon.sh
 
 logs:
 	@echo "Watching logs (Ctrl+C to stop)..."
@@ -98,5 +96,6 @@ dev-setup:
 	python3 -m venv venv
 	@echo "Virtual environment created!"
 	@echo "Now run: source venv/bin/activate && make install"
+
 
 

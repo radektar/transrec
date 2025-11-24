@@ -16,6 +16,35 @@ from src.app_status import AppStatus
 from src.state_manager import get_last_sync_time, save_sync_time
 
 
+def send_notification(title: str, message: str, subtitle: str = "") -> None:
+    """Send macOS notification using osascript.
+    
+    Args:
+        title: Notification title
+        message: Notification message body
+        subtitle: Optional subtitle
+    """
+    try:
+        # Escape quotes in strings
+        title = title.replace('"', '\\"')
+        message = message.replace('"', '\\"')
+        subtitle = subtitle.replace('"', '\\"')
+        
+        if subtitle:
+            script = f'display notification "{message}" with title "{title}" subtitle "{subtitle}"'
+        else:
+            script = f'display notification "{message}" with title "{title}"'
+        
+        subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            timeout=5.0,
+            check=False
+        )
+    except Exception as e:
+        logger.debug(f"Failed to send notification: {e}")
+
+
 class Transcriber:
     """Main transcription engine.
     
@@ -601,6 +630,13 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
         logger.info(f"✓ Recorder detected: {recorder}")
         self.recorder_monitoring = True
         
+        # Send notification about recorder detection
+        send_notification(
+            title="Olympus Transcriber",
+            subtitle="Recorder wykryty",
+            message=f"Podłączono: {recorder.name}"
+        )
+        
         # Get last sync time
         last_sync = self.get_last_sync_time()
         logger.info(f"📅 Looking for files modified after: {last_sync}")
@@ -608,6 +644,14 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
         # Find new audio files
         new_files = self.find_audio_files(recorder, last_sync)
         logger.info(f"📁 Found {len(new_files)} new audio file(s)")
+        
+        # Notify if new files found
+        if new_files:
+            send_notification(
+                title="Olympus Transcriber",
+                subtitle=f"Znaleziono {len(new_files)} nowych nagrań",
+                message="Rozpoczynam transkrypcję..."
+            )
         
         # Transcribe each file
         if new_files:
@@ -622,6 +666,13 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
             logger.info(
                 f"✓ Transcription batch complete: "
                 f"{success_count}/{len(new_files)} succeeded"
+            )
+            
+            # Send completion notification
+            send_notification(
+                title="Olympus Transcriber",
+                subtitle="Transkrypcja zakończona",
+                message=f"Przetworzono: {success_count}/{len(new_files)} plików"
             )
         else:
             logger.info("ℹ️  No new files to transcribe")

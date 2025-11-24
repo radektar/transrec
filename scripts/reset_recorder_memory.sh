@@ -1,88 +1,33 @@
-#!/bin/bash
-#
-# Reset Olympus Transcriber Memory
-# 
-# Ten skrypt resetuje "pamięć" systemu transkrypcji, co powoduje że 
-# przy następnym uruchomieniu zobaczy wszystkie pliki utworzone po 18 listopada 2025.
-#
-# Użycie:
-#   bash scripts/reset_recorder_memory.sh
-#   lub
-#   bash scripts/reset_recorder_memory.sh 2025-11-18
-#
+Script started on Mon Nov 24 11:30:12 2025
+[1m[7m%[27m[1m[0m                                                                                                                                                                                                                        [0m[27m[24m[Jradoslawtaraszka@Radeks-Mac-mini Olympus_transcription % [K[?2004hggit staty us[?2004l
+On branch WIP
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	[31mmodified:   .flake8[m
+	[31mmodified:   CHANGELOG.md[m
+	[31mmodified:   Docs/API.md[m
+	[31mmodified:   Docs/DEVELOPMENT.md[m
+	[31mmodified:   Docs/TESTING-GUIDE.md[m
+	[31mmodified:   Makefile[m
+	[31mmodified:   OBSIDIAN-SETUP.md[m
+	[31mmodified:   PROJECT-SUMMARY.md[m
+	[31mmodified:   README.md[m
+	[31mmodified:   pyproject.toml[m
+	[31mmodified:   requirements-dev.txt[m
+	[31mmodified:   scripts/reset_recorder_memory.sh[m
+	[31mmodified:   scripts/run_with_fresh_memory.sh[m
+	[31mmodified:   src/__init__.py[m
+	[31mmodified:   src/logger.py[m
+	[31mmodified:   src/transcriber.py[m
+	[31mmodified:   tests/__init__.py[m
+	[31mmodified:   tests/test_config.py[m
+	[31mmodified:   tests/test_file_monitor.py[m
 
-set -e
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	[31mTESTING-DAEMON.md[m
+	[31mscripts/restart_daemon.sh[m
 
-# Kolory dla outputu
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-STATE_FILE="$HOME/.olympus_transcriber_state.json"
-BACKUP_FILE="$HOME/.olympus_transcriber_state.json.backup"
-
-# Data do ustawienia (domyślnie 18 listopada 2025 00:00:00)
-# Można przekazać jako argument: ./reset_recorder_memory.sh 2025-11-15
-TARGET_DATE="${1:-2025-11-18}"
-
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${YELLOW}   Reset Olympus Transcriber Memory${NC}"
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-echo ""
-
-# Sprawdź czy plik state istnieje
-if [ -f "$STATE_FILE" ]; then
-    echo -e "${YELLOW}📁 Znaleziono istniejący plik state:${NC}"
-    echo "   $STATE_FILE"
-    echo ""
-    
-    # Pokaż obecny last_sync
-    if command -v jq &> /dev/null; then
-        CURRENT_SYNC=$(jq -r '.last_sync' "$STATE_FILE" 2>/dev/null || echo "N/A")
-        echo -e "${YELLOW}📅 Obecny last_sync:${NC} $CURRENT_SYNC"
-    else
-        echo -e "${YELLOW}📅 Obecna zawartość:${NC}"
-        cat "$STATE_FILE"
-    fi
-    echo ""
-    
-    # Backup obecnego pliku
-    echo -e "${GREEN}💾 Tworzę backup...${NC}"
-    cp "$STATE_FILE" "$BACKUP_FILE"
-    echo "   ✓ Backup zapisany: $BACKUP_FILE"
-    echo ""
-else
-    echo -e "${YELLOW}ℹ️  Plik state nie istnieje (to jest OK przy pierwszym uruchomieniu)${NC}"
-    echo ""
-fi
-
-# Utwórz nowy plik state z datą 18 listopada 2025 00:00:00
-NEW_TIMESTAMP="${TARGET_DATE}T00:00:00.000000"
-
-echo -e "${GREEN}🔄 Resetuję pamięć do:${NC} $NEW_TIMESTAMP"
-echo ""
-
-# Zapisz nowy state
-cat > "$STATE_FILE" << EOF
-{
-  "last_sync": "$NEW_TIMESTAMP"
-}
-EOF
-
-echo -e "${GREEN}✓ Gotowe!${NC}"
-echo ""
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}Co dalej:${NC}"
-echo ""
-echo "1. Przy następnym uruchomieniu, system zobaczy wszystkie pliki"
-echo "   audio z recordera utworzone PO: $TARGET_DATE 00:00:00"
-echo ""
-echo "2. Uruchom transkrypcję standardowo:"
-echo "   ${YELLOW}python -m src.main${NC}"
-echo ""
-echo "3. Jeśli chcesz wrócić do poprzedniego stanu:"
-echo "   ${YELLOW}mv $BACKUP_FILE $STATE_FILE${NC}"
-echo ""
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════${NC}"
-
+no changes added to commit (use "git add" and/or "git commit -a")
+[1m[7m%[27m[1m[0m                                                                                                                                                                                                                        [0m[27m[24m[Jradoslawtaraszka@Radeks-Mac-mini Olympus_transcription % [K[?2004hggti as   g git add . & fg g  g git commit 0 -m "

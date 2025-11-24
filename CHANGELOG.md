@@ -244,6 +244,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- macOS native notifications for key events (recorder detected, files found, transcription complete)
+- Helper script `scripts/restart_daemon.sh` for easy daemon management
+- Improved LaunchAgent configuration (uses `python -m src.main` for better module resolution)
+
+### Changed
+- Daemon now sends system notifications visible in Notification Center
+- Makefile `reload-daemon` command now uses restart script
+
+### Fixed
+- LaunchAgent module import issues by using `python -m` execution
+
+## [1.5.1] - 2025-11-24
+
+### Added
+- macOS native notifications for recorder detection and transcription events
+- `scripts/restart_daemon.sh` - convenient daemon restart script
+
+### Changed
+- LaunchAgent now uses `python -m src.main` instead of direct script execution
+- Improved daemon reliability with proper module path resolution
+
+### Fixed
+- Fixed `ModuleNotFoundError: No module named 'src'` in LaunchAgent mode
+
+## [Unreleased - Future]
+
 ### Planned Features
 - Obsidian integration for automatic note creation
 - N8N webhook notifications

@@ -217,13 +217,31 @@ tail -f /tmp/olympus-transcriber-err.log
 ```bash
 # Status
 launchctl list | grep olympus-transcriber
+# lub:
+make status
+
+# Restart (zalecane)
+bash scripts/restart_daemon.sh
+# lub:
+make reload-daemon
 
 # Stop
 launchctl unload ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
+# lub:
+make stop-daemon
 
 # Start
 launchctl load ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
 ```
+
+### Powiadomienia macOS
+
+Daemon automatycznie wyświetla powiadomienia systemowe przy:
+- **Wykryciu recordera** - "Podłączono: LS-P1"
+- **Znalezieniu nowych plików** - "Znaleziono X nowych nagrań"
+- **Zakończeniu transkrypcji** - "Przetworzono: X/Y plików"
+
+Upewnij się, że w **System Settings → Notifications** włączone są powiadomienia dla Terminal/Script Editor.
 
 ## 🧪 Development
 

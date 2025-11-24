@@ -579,3 +579,4 @@ ls -la ~/.olympus_transcriber_state.json
 For more troubleshooting, see `DEVELOPMENT.md` and application logs.
 
 
+
