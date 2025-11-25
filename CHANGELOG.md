@@ -509,6 +509,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Maksymalnie 150 existing tags w promptcie (ograniczenie context length)
 - Timeout API 10s może być za krótki dla bardzo długich transkrypcji
 
+## [1.8.1] - 2025-11-25
+
+### Fixed
+- Ustabilizowano fallback whisper.cpp z Metal/Core ML na tryb CPU przez jawne wyłączenie backendów (`WHISPER_COREML=0`, `GGML_METAL_DISABLE=1`), co eliminuje powtarzające się błędy transkrypcji na starszych urządzeniach.
+- Wykrywane i automatycznie czyszczone są przeterminowane pliki lock (`transcriber.lock`), aby zapobiec trwałemu blokowaniu `process_recorder()` po awarii poprzedniego procesu.
+
+### Testing
+- Dodano testy jednostkowe zabezpieczające konfigurację fallbacku CPU i obsługę starych plików lock w `Transcriber`.
+
 ## [Unreleased - Future]
 
 ### Planned Features

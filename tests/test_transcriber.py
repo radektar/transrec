@@ -571,6 +571,52 @@ def test_run_macwhisper_retries_on_metal_error(transcriber, tmp_path, monkeypatc
     assert mock_runner.call_args_list[1].kwargs["use_coreml"] is False
 
 
+def test_run_whisper_transcription_disables_metal_for_cpu(
+    transcriber, tmp_path, monkeypatch
+):
+    """CPU fallback should disable Core ML / Metal backends via environment."""
+    from src import config as config_module
+
+    audio_file = tmp_path / "sample.mp3"
+    audio_file.touch()
+
+    # Point config to temporary paths so command construction works
+    monkeypatch.setattr(config_module.config, "WHISPER_CPP_MODELS_DIR", tmp_path)
+    monkeypatch.setattr(config_module.config, "WHISPER_MODEL", "small")
+    monkeypatch.setattr(
+        config_module.config,
+        "WHISPER_CPP_PATH",
+        tmp_path / "whisper-cli",
+    )
+    monkeypatch.setattr(config_module.config, "TRANSCRIBE_DIR", tmp_path)
+
+    captured = {}
+
+    def fake_run(
+        cmd,
+        capture_output,
+        timeout,
+        text,
+        env=None,
+    ):
+        captured["env"] = env
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+    monkeypatch.setattr("src.transcriber.subprocess.run", fake_run)
+
+    _ = transcriber._run_whisper_transcription(audio_file, use_coreml=False)
+
+    env = captured.get("env")
+    assert env is not None
+    assert env.get("WHISPER_COREML") == "0"
+    assert env.get("GGML_METAL_DISABLE") == "1"
+
+
 def test_process_recorder_skips_when_lock_held(transcriber, monkeypatch):
     """process_recorder should not run if lock acquisition fails."""
     from src import transcriber as transcriber_module
@@ -614,4 +660,55 @@ def test_process_recorder_releases_lock(transcriber, monkeypatch):
         transcriber.process_recorder()
 
     assert released["value"] is True
+
+
+def test_process_lock_removes_stale_file(tmp_path, monkeypatch):
+    """Stale lock files should be cleaned up so processing can continue."""
+    from src import transcriber as transcriber_module
+    from src.transcriber import ProcessLock
+    from src import config as config_module
+    import time as time_module
+
+    # Patch logger to avoid real logging side effects during the test.
+    monkeypatch.setattr(transcriber_module, "logger", MagicMock())
+
+    lock_path = tmp_path / "transcriber.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create a stale timestamp older than TRANSCRIPTION_TIMEOUT + buffer.
+    stale_age = config_module.config.TRANSCRIPTION_TIMEOUT + 1200
+    stale_timestamp = time_module.time() - stale_age
+    lock_path.write_text(f"{stale_timestamp:.0f}", encoding="utf-8")
+
+    lock = ProcessLock(lock_path)
+    acquired = lock.acquire()
+
+    assert acquired is True
+    # Timestamp in the lock file should be refreshed.
+    new_timestamp = float(lock_path.read_text(encoding="utf-8").strip())
+    assert new_timestamp > stale_timestamp
+
+
+def test_process_lock_keeps_recent_lock(tmp_path, monkeypatch):
+    """Recent lock files should prevent new acquisition (no false cleanup)."""
+    from src import transcriber as transcriber_module
+    from src.transcriber import ProcessLock
+    from src import config as config_module
+    import time as time_module
+
+    monkeypatch.setattr(transcriber_module, "logger", MagicMock())
+
+    lock_path = tmp_path / "transcriber.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create a recent timestamp younger than the stale threshold.
+    recent_age = config_module.config.TRANSCRIPTION_TIMEOUT / 2
+    recent_timestamp = time_module.time() - recent_age
+    lock_path.write_text(f"{recent_timestamp:.0f}", encoding="utf-8")
+
+    lock = ProcessLock(lock_path)
+    acquired = lock.acquire()
+
+    # Lock should not be acquired because existing one is still recent.
+    assert acquired is False
 

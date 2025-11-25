@@ -69,11 +69,45 @@ class ProcessLock:
         try:
             self.lock_path.parent.mkdir(parents=True, exist_ok=True)
             self._fd = os.open(
-                str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY
+                str(self.lock_path),
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY,
             )
             os.write(self._fd, f"{time.time():.0f}".encode("utf-8"))
             return True
         except FileExistsError:
+            # Detect and clean up stale lock files left by crashed processes.
+            stale_age_seconds = config.TRANSCRIPTION_TIMEOUT + 600
+            lock_age: Optional[float] = None
+
+            try:
+                if self.lock_path.exists():
+                    with self.lock_path.open("r", encoding="utf-8") as handle:
+                        content = handle.read().strip()
+                        timestamp = float(content)
+                        lock_age = time.time() - timestamp
+            except (OSError, ValueError):
+                # If we cannot read or parse the timestamp, treat as unknown age.
+                lock_age = None
+
+            if lock_age is not None and lock_age > stale_age_seconds:
+                logger.warning(
+                    "Detected stale process lock at %s (age=%.0fs), attempting "
+                    "cleanup",
+                    self.lock_path,
+                    lock_age,
+                )
+                try:
+                    self.lock_path.unlink()
+                except OSError as error:
+                    logger.warning(
+                        "Could not remove stale process lock file %s: %s",
+                        self.lock_path,
+                        error,
+                    )
+                else:
+                    # Retry acquisition once after successful cleanup.
+                    return self.acquire()
+
             return False
         except OSError as error:
             logger.error("Could not create process lock at %s: %s", self.lock_path, error)
@@ -367,11 +401,20 @@ class Transcriber:
         if config.WHISPER_LANGUAGE:
             whisper_cmd.extend(["-l", config.WHISPER_LANGUAGE])
         
-        # Set environment for Core ML control
+        # Set environment for Core ML / Metal control
         env = None
         if not use_coreml:
-            env = {**subprocess.os.environ, "WHISPER_COREML": "0"}
-            logger.debug("Core ML disabled for this attempt")
+            # Explicitly disable Core ML / Metal backends to force pure CPU mode.
+            # Using both WHISPER_COREML and GGML_METAL_DISABLE increases
+            # compatibility across whisper.cpp / ggml versions.
+            base_env = dict(subprocess.os.environ)
+            base_env["WHISPER_COREML"] = "0"
+            base_env["GGML_METAL_DISABLE"] = "1"
+            env = base_env
+            logger.debug(
+                "Core ML / Metal disabled for this attempt "
+                "(WHISPER_COREML=0, GGML_METAL_DISABLE=1)"
+            )
         
         logger.debug(
             f"Running whisper.cpp: model={config.WHISPER_MODEL}, "

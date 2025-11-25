@@ -27,7 +27,7 @@ def _patch_anthropic(monkeypatch, response_text: str) -> None:
 
 def test_claude_tagger_parses_json(monkeypatch):
     """ClaudeTagger should parse unique tags from JSON response."""
-    _patch_anthropic(monkeypatch, '["sauna", "zdrowie", "sauna"]')
+    _patch_anthropic(monkeypatch, '["sauna", "zdrowie", "zamówienie telefoniczne"]')
     monkeypatch.setattr(tagger_module.config, "ENABLE_LLM_TAGGING", True)
 
     tagger = ClaudeTagger(api_key="test", model="claude-test")
@@ -40,6 +40,7 @@ def test_claude_tagger_parses_json(monkeypatch):
 
     assert isinstance(tags, list)
     assert "sauna" in tags
+    assert "zamowienie-telefoniczne" in tags
     assert len(tags) <= Config().MAX_TAGS_PER_NOTE
 
 
