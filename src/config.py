@@ -94,11 +94,22 @@ tags: [transcription]
             self.RECORDER_NAMES = ["LS-P1", "OLYMPUS", "RECORDER"]
         
         if self.TRANSCRIBE_DIR is None:
-            # Obsidian vault path for transcriptions
-            self.TRANSCRIBE_DIR = Path(
-                "/Users/radoslawtaraszka/Library/Mobile Documents/"
-                "iCloud~md~obsidian/Documents/Obsidian/11-Transcripts"
-            )
+            # 1. Priority: environment variable (can be set differently on each Mac)
+            env_dir = os.getenv("OLYMPUS_TRANSCRIBE_DIR")
+            if env_dir:
+                self.TRANSCRIBE_DIR = Path(env_dir).expanduser().resolve()
+            else:
+                # 2. Fallback: standard Obsidian vault location in iCloud,
+                # based on user's home directory (Path.home())
+                self.TRANSCRIBE_DIR = (
+                    Path.home()
+                    / "Library"
+                    / "Mobile Documents"
+                    / "iCloud~md~obsidian"
+                    / "Documents"
+                    / "Obsidian"
+                    / "11-Transcripts"
+                ).resolve()
         
         if self.LOG_DIR is None:
             self.LOG_DIR = Path.home() / "Library" / "Logs"

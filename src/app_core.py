@@ -1,5 +1,6 @@
 """Core application orchestrator for Olympus Transcriber."""
 
+import os
 import time
 import signal
 import threading
@@ -97,6 +98,49 @@ class OlympusTranscriber:
         logger.info(f"📂 Transcription directory: {config.TRANSCRIBE_DIR}")
         logger.info(f"📄 State file: {config.STATE_FILE}")
         logger.info(f"📋 Log file: {config.LOG_FILE}")
+
+        # Validate and ensure TRANSCRIBE_DIR exists
+        transcribe_dir_source = os.getenv("OLYMPUS_TRANSCRIBE_DIR")
+        if transcribe_dir_source:
+            logger.info(
+                f"✓ TRANSCRIBE_DIR set from OLYMPUS_TRANSCRIBE_DIR: "
+                f"{transcribe_dir_source}"
+            )
+        else:
+            logger.info(
+                f"ℹ️  TRANSCRIBE_DIR using default path "
+                f"(set OLYMPUS_TRANSCRIBE_DIR to override)"
+            )
+        
+        # Ensure transcription directory exists
+        try:
+            config.ensure_directories()
+            if config.TRANSCRIBE_DIR.exists():
+                logger.info(f"✓ Transcription directory exists: {config.TRANSCRIBE_DIR}")
+            else:
+                logger.warning(
+                    f"⚠️  Transcription directory does not exist and could not be created: "
+                    f"{config.TRANSCRIBE_DIR}"
+                )
+        except Exception as e:
+            logger.error(
+                f"✗ Failed to create transcription directory: {e}",
+                exc_info=True
+            )
+            logger.error(
+                "Please ensure OLYMPUS_TRANSCRIBE_DIR points to a valid, "
+                "accessible directory (same vault path on all computers to avoid duplicates)"
+            )
+            raise
+        
+        # Diagnostic check: warn if directory doesn't look like a synced vault
+        transcribe_path_str = str(config.TRANSCRIBE_DIR)
+        if "iCloud" not in transcribe_path_str and "Obsidian" not in transcribe_path_str:
+            logger.warning(
+                "⚠️  TRANSCRIBE_DIR does not appear to be in a synced location "
+                "(iCloud/Obsidian). For multi-computer setups, ensure all instances "
+                "point to the same synchronized vault directory to prevent duplicate transcriptions."
+            )
 
         # Initialize transcriber
         try:

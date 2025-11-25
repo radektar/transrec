@@ -904,6 +904,53 @@ bash setup.sh
 
 Edit `src/config.py` to customize paths and timeouts.
 
+### Multi-Computer Setup: TRANSCRIBE_DIR
+
+When installing the application on multiple Macs with different usernames, configure `OLYMPUS_TRANSCRIBE_DIR` to point to the same synchronized Obsidian vault directory on all computers. This prevents duplicate transcriptions.
+
+**On each computer:**
+
+1. **Determine your Obsidian vault transcription directory path**
+   
+   Example:
+   ```
+   /Users/your_username/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian/11-Transcripts
+   ```
+
+2. **Set environment variable**
+
+   **Option A: Using `.env` file** (for development/testing)
+   
+   Create `.env` in project root:
+   ```bash
+   echo 'OLYMPUS_TRANSCRIBE_DIR="/Users/your_username/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian/11-Transcripts"' >> .env
+   ```
+
+   **Option B: Using shell profile** (for production/LaunchAgent)
+   
+   Add to `~/.zshrc`:
+   ```bash
+   echo 'export OLYMPUS_TRANSCRIBE_DIR="/Users/your_username/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian/11-Transcripts"' >> ~/.zshrc
+   source ~/.zshrc
+   ```
+
+3. **Verify configuration**
+   
+   Start the application and check logs:
+   ```bash
+   python src/main.py
+   ```
+   
+   Look for:
+   ```
+   ✓ TRANSCRIBE_DIR set from OLYMPUS_TRANSCRIBE_DIR: /path/to/vault
+   ```
+
+**Important:**
+- All computers must use the **exact same directory path** (same vault folder)
+- The application automatically prevents duplicates by checking for existing markdown files with matching `source: <audio_file>` in YAML frontmatter
+- If you see a warning about non-synced location, ensure you're using a synchronized vault (iCloud/Obsidian)
+
 ## Logs
 
 - Main: `~/Library/Logs/olympus_transcriber.log`

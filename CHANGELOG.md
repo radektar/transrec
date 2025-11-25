@@ -366,6 +366,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Udostępniono klienta `Anthropic` na poziomie modułu `src/summarizer`, dzięki czemu testy mogą go patchować bez błędów `AttributeError`.
 
+## [1.7.0] - 2025-11-25
+
+### Added
+- **Multi-computer support**: Konfiguracja `OLYMPUS_TRANSCRIBE_DIR` przez zmienną środowiskową
+  - Pozwala na instalację aplikacji na wielu komputerach z różnymi nazwami użytkowników
+  - Wszystkie instancje mogą wskazywać na ten sam synchronizowany katalog vaulta Obsidian
+  - Zapobiega duplikacji transkrypcji między komputerami
+- **Walidacja katalogu transkrypcji przy starcie**:
+  - Logowanie źródła `TRANSCRIBE_DIR` (ze zmiennej środowiskowej lub domyślnej ścieżki)
+  - Automatyczne tworzenie katalogu jeśli nie istnieje
+  - Ostrzeżenie jeśli katalog nie wygląda na synchronizowany (iCloud/Obsidian)
+  - Szczegółowe komunikaty błędów z instrukcjami konfiguracji
+- Dokumentacja konfiguracji multi-computer w `DEVELOPMENT.md` i `INSTALLATION-GUIDE`
+
+### Changed
+- `TRANSCRIBE_DIR` w `config.py`:
+  - Najpierw sprawdza zmienną środowiskową `OLYMPUS_TRANSCRIBE_DIR`
+  - Jeśli nie ustawiona, używa domyślnej ścieżki opartej na `Path.home()` zamiast twardego `/Users/radoslawtaraszka/...`
+  - Ścieżka zawsze rozwiązywana do absolutnej (`.resolve()`)
+- Ulepszone logowanie przy starcie aplikacji (`app_core.py`):
+  - Wyświetla źródło konfiguracji `TRANSCRIBE_DIR`
+  - Pokazuje czy katalog istnieje i czy został utworzony
+  - Ostrzega o potencjalnych problemach z synchronizacją
+
+### Fixed
+- Problem z instalacją na wielu komputerach z różnymi nazwami użytkowników
+- Twardo zakodowana ścieżka użytkownika w konfiguracji
+
+### Technical Details
+- Mechanizm sprawdzania `source: <audio_file>` w YAML frontmatter zapobiega duplikatom między komputerami
+- Wszystkie instancje muszą wskazywać na ten sam katalog vaulta dla pełnej ochrony przed duplikatami
+- Kompatybilność wsteczna: jeśli `OLYMPUS_TRANSCRIBE_DIR` nie jest ustawiona, używa standardowej lokalizacji
+
+### Documentation
+- Dodano sekcję "Multi-Computer Setup: TRANSCRIBE_DIR Configuration" w `DEVELOPMENT.md`
+- Rozszerzono sekcję "Configuration" w `INSTALLATION-GUIDE` o instrukcje dla wielu komputerów
+- Przykłady konfiguracji przez `.env` i `~/.zshrc`
+
 ## [Unreleased - Future]
 
 ### Planned Features
@@ -396,6 +434,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.7.0** (2025-11-25) - Multi-computer support with OLYMPUS_TRANSCRIBE_DIR configuration
+- **1.6.1** (2025-11-25) - Enhanced markdown formatting and Claude prompts
 - **1.6.0** (2025-11-25) - Local staging workflow for robust transcription, improved batch failure handling
 - **1.5.2** (2025-11-24) - Fixed notification spam and removed unnecessary delays
 - **1.5.1** (2025-11-24) - Native notifications and daemon improvements

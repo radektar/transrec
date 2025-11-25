@@ -169,6 +169,56 @@ Staging directory is configured in `src/config.py`:
 LOCAL_RECORDINGS_DIR: Path = None  # Defaults to ~/.olympus_transcriber/recordings
 ```
 
+#### Multi-Computer Setup: TRANSCRIBE_DIR Configuration
+
+When running the application on multiple Macs with different usernames, you need to ensure all instances point to the **same synchronized vault directory** to prevent duplicate transcriptions.
+
+**Problem:**
+- Default `TRANSCRIBE_DIR` uses `Path.home()`, which resolves to different paths on different computers
+- Each computer would have its own local state file, potentially causing duplicate transcriptions
+
+**Solution:**
+Set the `OLYMPUS_TRANSCRIBE_DIR` environment variable on each computer to point to the same synchronized Obsidian vault directory.
+
+**On each computer:**
+
+1. **Option A: Using `.env` file** (recommended for development)
+   
+   Create or edit `.env` in the project root:
+   ```bash
+   OLYMPUS_TRANSCRIBE_DIR="/Users/your_username/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian/11-Transcripts"
+   ```
+
+2. **Option B: Using shell environment** (recommended for production)
+   
+   Add to `~/.zshrc` (or `~/.bash_profile`):
+   ```bash
+   export OLYMPUS_TRANSCRIBE_DIR="/Users/your_username/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian/11-Transcripts"
+   ```
+   
+   Then reload:
+   ```bash
+   source ~/.zshrc
+   ```
+
+**Important:**
+- All computers must point to the **exact same directory** (same vault, same folder)
+- The application checks for existing transcriptions by looking for markdown files with matching `source: <audio_file>` in YAML frontmatter
+- As long as all instances use the same `TRANSCRIBE_DIR`, duplicate transcriptions are automatically prevented
+
+**Verification:**
+When the application starts, it logs the transcription directory being used:
+```
+✓ TRANSCRIBE_DIR set from OLYMPUS_TRANSCRIBE_DIR: /path/to/vault
+```
+or
+```
+ℹ️  TRANSCRIBE_DIR using default path (set OLYMPUS_TRANSCRIBE_DIR to override)
+```
+
+**Warning:**
+If the directory doesn't appear to be in a synced location (iCloud/Obsidian), the application will log a warning reminding you to use a synchronized vault for multi-computer setups.
+
 ### Testing Staging
 
 ```bash
