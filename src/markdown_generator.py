@@ -3,7 +3,7 @@
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 try:
     from mutagen import File as MutagenFile
@@ -139,7 +139,8 @@ class MarkdownGenerator:
         transcript: str,
         summary: Dict[str, str],
         metadata: Dict[str, str],
-        output_dir: Path
+        output_dir: Path,
+        tags: Optional[List[str]] = None
     ) -> Path:
         """Create markdown document from transcript and metadata.
         
@@ -166,6 +167,10 @@ class MarkdownGenerator:
         date_str = metadata["recording_datetime"].strftime("%Y-%m-%d")
         recording_date_str = metadata["recording_datetime"].isoformat()
         
+        # Prepare tag list
+        tag_list = tags or ["transcription"]
+        tags_str = ", ".join(tag_list)
+
         # Fill template
         content = self.template.format(
             title=summary.get("title", "Nagranie"),
@@ -173,6 +178,7 @@ class MarkdownGenerator:
             recording_date=recording_date_str,
             source_file=metadata["source_file"],
             duration=metadata["duration_formatted"],
+             tags=tags_str,
             summary=summary.get("summary", "Brak podsumowania."),
             transcript=transcript
         )

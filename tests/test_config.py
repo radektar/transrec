@@ -10,7 +10,7 @@ def test_config_initialization():
     config = Config()
     
     assert config.RECORDER_NAMES == ["LS-P1", "OLYMPUS", "RECORDER"]
-    assert config.TRANSCRIPTION_TIMEOUT == 3600  # Updated to 60 minutes
+    assert config.TRANSCRIPTION_TIMEOUT == 3600  # 60 minutes
     assert config.PERIODIC_CHECK_INTERVAL == 30
     assert config.MOUNT_MONITOR_DELAY == 1
 
@@ -49,6 +49,27 @@ def test_config_whisper_cpp_paths():
     assert isinstance(config.WHISPER_CPP_PATH, Path)
     assert config.WHISPER_CPP_MODELS_DIR is not None
     assert isinstance(config.WHISPER_CPP_MODELS_DIR, Path)
+
+
+def test_config_tagging_defaults(monkeypatch):
+    """Tagging configuration should have sane defaults."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy-key")
+    cfg = Config()
+
+    assert cfg.ENABLE_LLM_TAGGING is True
+    assert cfg.MAX_TAGS_PER_NOTE == 6
+    assert cfg.MAX_EXISTING_TAGS_IN_PROMPT == 150
+    assert cfg.MAX_TAGGER_SUMMARY_CHARS == 3000
+    assert cfg.MAX_TAGGER_TRANSCRIPT_CHARS == 1500
+
+
+def test_config_disables_tagging_when_summarization_off(monkeypatch):
+    """Tagging should be disabled automatically if summarization is off."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    cfg = Config()
+
+    assert cfg.ENABLE_SUMMARIZATION is False
+    assert cfg.ENABLE_LLM_TAGGING is False
 
 
 def test_config_ensure_directories(tmp_path, monkeypatch):

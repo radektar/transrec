@@ -1,10 +1,13 @@
 """Tests for transcriber module."""
 
-import pytest
 import json
-from pathlib import Path
+import subprocess
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+
 from src.transcriber import Transcriber
 from src.summarizer import BaseSummarizer
 from src.markdown_generator import MarkdownGenerator
@@ -282,6 +285,41 @@ def test_postprocess_transcript_no_summarizer(transcriber, tmp_path, monkeypatch
     assert "Brak podsumowania" in summary.get("summary", "")
 
 
+def test_postprocess_transcript_passes_tags(monkeypatch, tmp_path, transcriber):
+    """Tag list should be passed into markdown generator."""
+    from src import config as config_module
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    monkeypatch.setattr(config_module.config, "TRANSCRIBE_DIR", output_dir)
+    monkeypatch.setattr(config_module.config, "ENABLE_LLM_TAGGING", False)
+
+    audio_file = tmp_path / "sample.mp3"
+    audio_file.touch()
+    transcript_file = output_dir / "sample.txt"
+    transcript_file.write_text("Treść transkrypcji")
+
+    transcriber.summarizer = None
+
+    mock_md_gen = MagicMock(spec=MarkdownGenerator)
+    mock_md_gen.extract_audio_metadata.return_value = {
+        "source_file": "sample.mp3",
+        "extension": ".mp3",
+        "recording_datetime": datetime.now(),
+        "duration_seconds": 60,
+        "duration_formatted": "00:01:00",
+    }
+    mock_md_gen.create_markdown_document.return_value = output_dir / "sample.md"
+    transcriber.markdown_generator = mock_md_gen
+
+    result = transcriber._postprocess_transcript(audio_file, transcript_file)
+
+    assert result is True
+    _, kwargs = mock_md_gen.create_markdown_document.call_args
+    assert "tags" in kwargs
+    assert kwargs["tags"][0] == "transcription"
+
+
 def test_process_recorder_no_recorder(transcriber):
     """Test process_recorder when no recorder is found."""
     with patch.object(transcriber, 'find_recorder', return_value=None):
@@ -445,4 +483,135 @@ def test_process_recorder_batch_success_updates_sync(transcriber, tmp_path, monk
                     # Should save sync time because all files succeeded
                     mock_save.assert_called_once()
 
+
+def test_process_recorder_skips_files_with_existing_markdown(
+    transcriber, tmp_path, monkeypatch
+):
+    """Ensure recorder workflow checks for existing markdown before staging."""
+    from src import config as config_module
+
+    staging_dir = tmp_path / "staging"
+    staging_dir.mkdir()
+    transcript_dir = tmp_path / "transcripts"
+    transcript_dir.mkdir()
+    monkeypatch.setattr(config_module.config, "LOCAL_RECORDINGS_DIR", staging_dir)
+    monkeypatch.setattr(config_module.config, "TRANSCRIBE_DIR", transcript_dir)
+
+    recorder = tmp_path / "LS-P1"
+    recorder.mkdir()
+    processed_file = recorder / "processed.mp3"
+    processed_file.write_bytes(b"done")
+    new_file = recorder / "new.mp3"
+    new_file.write_bytes(b"new")
+
+    # Existing markdown referencing processed.mp3
+    md_file = transcript_dir / "existing.md"
+    md_file.write_text(
+        "---\n"
+        'title: "Zrobione"\n'
+        "date: 2025-11-25\n"
+        "recording_date: 2025-11-25T10:00:00\n"
+        "source: processed.mp3\n"
+        "duration: 00:01:00\n"
+        "tags: [transcription]\n"
+        "---\n\n"
+        "Treść\n"
+    )
+
+    staged_new = staging_dir / "new.mp3"
+    staged_new.write_bytes(b"new")
+
+    with patch.object(transcriber, "find_recorder", return_value=recorder):
+        with patch.object(
+            transcriber, "get_last_sync_time", return_value=datetime.now() - timedelta(days=1)
+        ):
+            with patch.object(transcriber, "_stage_audio_file", return_value=staged_new) as mock_stage:
+                with patch.object(transcriber, "transcribe_file", return_value=True) as mock_transcribe:
+                    with patch.object(transcriber, "save_sync_time") as mock_save_sync:
+                        transcriber.process_recorder()
+
+    mock_stage.assert_called_once()
+    assert mock_stage.call_args[0][0].name == "new.mp3"
+    mock_transcribe.assert_called_once_with(staged_new)
+    mock_save_sync.assert_called_once()
+
+
+def test_run_macwhisper_retries_on_metal_error(transcriber, tmp_path, monkeypatch):
+    """Whisper retry should trigger on Metal/Core ML failures."""
+    from src import config as config_module
+
+    transcript_dir = tmp_path / "output"
+    transcript_dir.mkdir()
+    monkeypatch.setattr(config_module.config, "TRANSCRIBE_DIR", transcript_dir)
+
+    audio_file = tmp_path / "sample.mp3"
+    audio_file.touch()
+
+    def run_side_effect(_, use_coreml=True):
+        if use_coreml:
+            return subprocess.CompletedProcess(
+                args=["whisper"],
+                returncode=1,
+                stdout="",
+                stderr="ggml_metal_device_init: tensor API disabled",
+            )
+        output_file = transcript_dir / "sample.txt"
+        output_file.write_text("ok")
+        return subprocess.CompletedProcess(
+            args=["whisper"], returncode=0, stdout="", stderr=""
+        )
+
+    mock_runner = MagicMock(side_effect=run_side_effect)
+    transcriber._run_whisper_transcription = mock_runner  # type: ignore[assignment]
+
+    result = transcriber._run_macwhisper(audio_file)
+
+    assert result == transcript_dir / "sample.txt"
+    assert mock_runner.call_count == 2
+    assert mock_runner.call_args_list[1].kwargs["use_coreml"] is False
+
+
+def test_process_recorder_skips_when_lock_held(transcriber, monkeypatch):
+    """process_recorder should not run if lock acquisition fails."""
+    from src import transcriber as transcriber_module
+
+    class DummyLock:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def acquire(self) -> bool:
+            return False
+
+        def release(self) -> None:
+            pass
+
+    monkeypatch.setattr(transcriber_module, "ProcessLock", DummyLock)
+
+    with patch.object(transcriber, "find_recorder") as mock_find:
+        transcriber.process_recorder()
+        mock_find.assert_not_called()
+
+
+def test_process_recorder_releases_lock(transcriber, monkeypatch):
+    """Lock should always be released even when recorder missing."""
+    from src import transcriber as transcriber_module
+
+    released = {"value": False}
+
+    class DummyLock:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def acquire(self) -> bool:
+            return True
+
+        def release(self) -> None:
+            released["value"] = True
+
+    monkeypatch.setattr(transcriber_module, "ProcessLock", DummyLock)
+
+    with patch.object(transcriber, "find_recorder", return_value=None):
+        transcriber.process_recorder()
+
+    assert released["value"] is True
 

@@ -212,6 +212,28 @@ class TestCreateMarkdownDocument:
         assert md_path.exists()
         content = md_path.read_text(encoding='utf-8')
         assert "Brak podsumowania" in content
+
+    def test_create_document_with_custom_tags(
+        self,
+        generator,
+        sample_transcript,
+        sample_summary,
+        sample_metadata,
+        tmp_path
+    ):
+        """Document should render provided tags in YAML frontmatter."""
+        output_dir = tmp_path / "output"
+
+        md_path = generator.create_markdown_document(
+            transcript=sample_transcript,
+            summary=sample_summary,
+            metadata=sample_metadata,
+            output_dir=output_dir,
+            tags=["transcription", "sauna", "zdrowie"]
+        )
+
+        content = md_path.read_text(encoding='utf-8')
+        assert "tags: [transcription, sauna, zdrowie]" in content
     
     def test_create_document_io_error(
         self, generator, sample_transcript, sample_summary,

@@ -1,12 +1,13 @@
 """Transcription engine for Olympus Transcriber."""
 
 import json
+import os
 import shutil
 import subprocess
 import time
-from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Callable
+from pathlib import Path
+from typing import Callable, Dict, List, Optional
 
 from src.config import config
 from src.logger import logger
@@ -14,6 +15,8 @@ from src.summarizer import get_summarizer, BaseSummarizer
 from src.markdown_generator import MarkdownGenerator
 from src.app_status import AppStatus
 from src.state_manager import get_last_sync_time, save_sync_time
+from src.tag_index import TagIndex
+from src.tagger import BaseTagger, get_tagger
 
 
 def send_notification(title: str, message: str, subtitle: str = "") -> None:
@@ -45,6 +48,52 @@ def send_notification(title: str, message: str, subtitle: str = "") -> None:
         logger.debug(f"Failed to send notification: {e}")
 
 
+class ProcessLock:
+    """File-based lock guarding recorder workflow execution."""
+
+    def __init__(self, lock_path: Path):
+        """Configure lock helper.
+
+        Args:
+            lock_path: Full path to lock file.
+        """
+        self.lock_path = lock_path
+        self._fd: Optional[int] = None
+
+    def acquire(self) -> bool:
+        """Attempt to acquire the lock.
+
+        Returns:
+            True if lock acquired, False otherwise.
+        """
+        try:
+            self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+            self._fd = os.open(
+                str(self.lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY
+            )
+            os.write(self._fd, f"{time.time():.0f}".encode("utf-8"))
+            return True
+        except FileExistsError:
+            return False
+        except OSError as error:
+            logger.error("Could not create process lock at %s: %s", self.lock_path, error)
+            return False
+
+    def release(self) -> None:
+        """Release the lock if held."""
+        if self._fd is not None:
+            try:
+                os.close(self._fd)
+            except OSError as error:
+                logger.warning("Error closing process lock descriptor: %s", error)
+            finally:
+                self._fd = None
+        try:
+            if self.lock_path.exists():
+                self.lock_path.unlink()
+        except OSError as error:
+            logger.warning("Could not remove process lock file %s: %s", self.lock_path, error)
+
 class Transcriber:
     """Main transcription engine.
     
@@ -70,6 +119,8 @@ class Transcriber:
         # Initialize summarizer and markdown generator
         self.summarizer: Optional[BaseSummarizer] = get_summarizer()
         self.markdown_generator = MarkdownGenerator()
+        self.tag_index = TagIndex()
+        self.tagger: Optional[BaseTagger] = get_tagger()
         
         # Ensure output directory exists
         config.ensure_directories()
@@ -336,6 +387,29 @@ class Transcriber:
             text=True,
             env=env,
         )
+
+    def _should_retry_without_coreml(
+        self, stderr: Optional[str], use_coreml_attempted: bool
+    ) -> bool:
+        """Determine if whisper run should be retried without Core ML acceleration.
+
+        Args:
+            stderr: stderr output from whisper.cpp invocation.
+            use_coreml_attempted: True if the failed run tried Core ML.
+
+        Returns:
+            True when stderr indicates Metal/Core ML failures and CPU retry is warranted.
+        """
+        if not use_coreml_attempted or not stderr:
+            return False
+
+        retry_markers = (
+            "Core ML",
+            "ggml_metal",
+            "MTLLibrar",
+            "tensor API disabled",
+        )
+        return any(marker in stderr for marker in retry_markers)
     
     def _run_macwhisper(self, audio_file: Path) -> Optional[Path]:
         """Run whisper.cpp transcription and return path to TXT file.
@@ -390,18 +464,16 @@ class Transcriber:
             )
             
             # If Core ML failed, retry without it
-            if result.returncode != 0 and "Core ML" in str(result.stderr):
+            if self._should_retry_without_coreml(result.stderr, use_coreml_attempted=True):
                 logger.warning(
-                    f"⚠️  Core ML failed, falling back to CPU for {audio_file.name}"
+                    f"⚠️  Core ML/Metal failed, falling back to CPU for {audio_file.name}"
                 )
                 if result.stderr:
                     logger.debug(f"  Error details: {result.stderr[:500]}")
-                
+
                 logger.info("🔄 Retrying transcription with CPU only")
                 result = self._run_whisper_transcription(audio_file, use_coreml=False)
-                logger.debug(
-                    f"CPU retry completed - returncode: {result.returncode}"
-                )
+                logger.debug(f"CPU retry completed - returncode: {result.returncode}")
             
             # Check for errors
             if result.returncode != 0:
@@ -534,6 +606,27 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
             # Extract audio metadata
             logger.debug("Extracting audio metadata...")
             metadata = self.markdown_generator.extract_audio_metadata(audio_file)
+
+            # Generate tags
+            tags = ["transcription"]
+            if config.ENABLE_LLM_TAGGING and self.tagger:
+                try:
+                    existing_tags = self.tag_index.existing_tags()
+                    generated_tags = self.tagger.generate_tags(
+                        transcript=transcript_text,
+                        summary_markdown=summary.get("summary", ""),
+                        existing_tags=existing_tags,
+                    )
+                    for tag in generated_tags:
+                        if tag not in tags:
+                            tags.append(tag)
+                except Exception as error:  # noqa: BLE001
+                    logger.error(
+                        "Tag generation failed for %s: %s",
+                        audio_file.name,
+                        error,
+                        exc_info=True,
+                    )
             
             # Create markdown document
             logger.info("📄 Creating markdown document...")
@@ -541,7 +634,8 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
                 transcript=transcript_text,
                 summary=summary,
                 metadata=metadata,
-                output_dir=config.TRANSCRIBE_DIR
+                output_dir=config.TRANSCRIBE_DIR,
+                tags=tags
             )
             
             logger.info(f"✓ Markdown document created: {md_path.name}")
@@ -681,114 +775,136 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
         This is the main entry point called when recorder activity is detected.
         It orchestrates the entire transcription workflow.
         """
-        logger.info("=" * 60)
-        logger.info("🔍 Checking for recorder...")
-        self._update_state(AppStatus.SCANNING)
-        
-        # Find recorder
-        recorder = self.find_recorder()
-        if not recorder:
-            logger.info("❌ Recorder not found")
-            self.recorder_monitoring = False
-            self.recorder_was_notified = False
+        lock = ProcessLock(config.PROCESS_LOCK_FILE)
+        if not lock.acquire():
+            logger.info(
+                "⛔️ Skipping process_recorder because another instance holds lock %s",
+                config.PROCESS_LOCK_FILE,
+            )
             self._update_state(AppStatus.IDLE)
             return
-        
-        logger.info(f"✓ Recorder detected: {recorder}")
-        
-        # Send notification only if this is first detection (not periodic check)
-        if not self.recorder_was_notified:
-            send_notification(
-                title="Olympus Transcriber",
-                subtitle="Recorder wykryty",
-                message=f"Podłączono: {recorder.name}"
-            )
-            self.recorder_was_notified = True
-        
-        self.recorder_monitoring = True
-        
-        # Get last sync time
-        last_sync = self.get_last_sync_time()
-        logger.info(f"📅 Looking for files modified after: {last_sync}")
-        
-        # Find new audio files
-        new_files = self.find_audio_files(recorder, last_sync)
-        logger.info(f"📁 Found {len(new_files)} new audio file(s)")
-        
-        # Notify if new files found
-        if new_files:
-            send_notification(
-                title="Olympus Transcriber",
-                subtitle=f"Znaleziono {len(new_files)} nowych nagrań",
-                message="Rozpoczynam transkrypcję..."
-            )
-        
-        processed_success = 0
-        processed_failed = 0
 
-        # Process each file: stage first, then transcribe
-        if new_files:
-            for recorder_file in new_files:
-                logger.info(f"Processing: {recorder_file.name}")
-                
-                # Stage file to local directory
-                staged_file = self._stage_audio_file(recorder_file)
-                if staged_file is None:
-                    logger.warning(
-                        f"⚠️  Failed to stage {recorder_file.name}, "
-                        "skipping transcription"
-                    )
-                    processed_failed += 1
-                    continue
-                
-                # Transcribe using staged file
-                if self.transcribe_file(staged_file):
-                    processed_success += 1
-                else:
-                    processed_failed += 1
-                
-                # Small delay between files
-                time.sleep(1)
+        try:
+            logger.info("=" * 60)
+            logger.info("🔍 Checking for recorder...")
+            self._update_state(AppStatus.SCANNING)
             
-            total_processed = processed_success + processed_failed
-            logger.info(
-                f"✓ Transcription batch complete: "
-                f"{processed_success}/{total_processed} succeeded, "
-                f"{processed_failed}/{total_processed} failed"
-            )
+            # Find recorder
+            recorder = self.find_recorder()
+            if not recorder:
+                logger.info("❌ Recorder not found")
+                self.recorder_monitoring = False
+                self.recorder_was_notified = False
+                self._update_state(AppStatus.IDLE)
+                return
             
-            # Send completion notification
-            send_notification(
-                title="Olympus Transcriber",
-                subtitle="Transkrypcja zakończona",
-                message=f"Przetworzono: {processed_success}/{total_processed} plików"
-            )
-        else:
-            logger.info("ℹ️  No new files to transcribe")
-        
-        # Only advance sync time if ALL files were successfully processed
-        # This prevents losing files that failed due to unmounting or other errors
-        if processed_failed == 0 and processed_success > 0:
-            self.save_sync_time()
-            logger.info("✓ Sync complete (state updated)")
-        elif processed_failed > 0:
-            logger.warning(
-                f"⚠️  Batch had {processed_failed} failure(s). "
-                "Not updating last_sync to avoid losing unprocessed files. "
-                "Failed files will be retried on next sync."
-            )
-        else:
-            logger.info(
-                "ℹ️  Skipping sync update (no files processed). "
-                "State remains at previous value."
-            )
-        logger.info("=" * 60)
-        
-        # Keep recorder_monitoring True if recorder still connected
-        # This prevents notification spam on periodic checks
-        if not self.find_recorder():
-            self.recorder_monitoring = False
-            self.recorder_was_notified = False
-        
-        self._update_state(AppStatus.IDLE)
+            logger.info(f"✓ Recorder detected: {recorder}")
+            
+            # Send notification only if this is first detection (not periodic check)
+            if not self.recorder_was_notified:
+                send_notification(
+                    title="Olympus Transcriber",
+                    subtitle="Recorder wykryty",
+                    message=f"Podłączono: {recorder.name}"
+                )
+                self.recorder_was_notified = True
+            
+            self.recorder_monitoring = True
+            
+            # Get last sync time
+            last_sync = self.get_last_sync_time()
+            logger.info(f"📅 Looking for files modified after: {last_sync}")
+            
+            # Find new audio files
+            new_files = self.find_audio_files(recorder, last_sync)
+            logger.info(f"📁 Found {len(new_files)} new audio file(s)")
+            
+            # Notify if new files found
+            if new_files:
+                send_notification(
+                    title="Olympus Transcriber",
+                    subtitle=f"Znaleziono {len(new_files)} nowych nagrań",
+                    message="Rozpoczynam transkrypcję..."
+                )
+            
+            processed_success = 0
+            processed_failed = 0
+
+            # Process each file: stage first, then transcribe
+            if new_files:
+                for recorder_file in new_files:
+                    logger.info(f"Processing: {recorder_file.name}")
+                    
+                    existing_markdown = self._find_existing_markdown_for_audio(recorder_file)
+                    if existing_markdown:
+                        logger.info(
+                            "↪️ Skipping already transcribed file: %s -> %s",
+                            recorder_file.name,
+                            existing_markdown.name,
+                        )
+                        processed_success += 1
+                        continue
+                    
+                    # Stage file to local directory
+                    staged_file = self._stage_audio_file(recorder_file)
+                    if staged_file is None:
+                        logger.warning(
+                            f"⚠️  Failed to stage {recorder_file.name}, "
+                            "skipping transcription"
+                        )
+                        processed_failed += 1
+                        continue
+                    
+                    # Transcribe using staged file
+                    if self.transcribe_file(staged_file):
+                        processed_success += 1
+                    else:
+                        processed_failed += 1
+                    
+                    # Small delay between files
+                    time.sleep(1)
+                
+                total_processed = processed_success + processed_failed
+                logger.info(
+                    f"✓ Transcription batch complete: "
+                    f"{processed_success}/{total_processed} succeeded, "
+                    f"{processed_failed}/{total_processed} failed"
+                )
+                
+                # Send completion notification
+                send_notification(
+                    title="Olympus Transcriber",
+                    subtitle="Transkrypcja zakończona",
+                    message=f"Przetworzono: {processed_success}/{total_processed} plików"
+                )
+            else:
+                logger.info("ℹ️  No new files to transcribe")
+            
+            # Only advance sync time if ALL files were successfully processed
+            # This prevents losing files that failed due to unmounting or other errors
+            if processed_failed == 0 and processed_success > 0:
+                self.save_sync_time()
+                logger.info("✓ Sync complete (state updated)")
+            elif processed_failed > 0:
+                logger.warning(
+                    f"⚠️  Batch had {processed_failed} failure(s). "
+                    "Not updating last_sync to avoid losing unprocessed files. "
+                    "Failed files will be retried on next sync."
+                )
+            else:
+                logger.info(
+                    "ℹ️  Skipping sync update (no files processed). "
+                    "State remains at previous value."
+                )
+            logger.info("=" * 60)
+            
+            # Keep recorder_monitoring True if recorder still connected
+            # This prevents notification spam on periodic checks
+            if not self.find_recorder():
+                self.recorder_monitoring = False
+                self.recorder_was_notified = False
+            
+            self._update_state(AppStatus.IDLE)
+        finally:
+            lock.release()
 

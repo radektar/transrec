@@ -42,6 +42,7 @@ class Config:
     TRANSCRIBE_DIR: Path = None
     LOG_DIR: Path = None
     LOCAL_RECORDINGS_DIR: Path = None  # Local staging area for recorder files
+    PROCESS_LOCK_FILE: Path = None  # Lock file preventing overlapping runs
     
     # Files
     STATE_FILE: Path = None
@@ -70,6 +71,13 @@ class Config:
     SUMMARY_MAX_WORDS: int = 200
     TITLE_MAX_LENGTH: int = 60
     DELETE_TEMP_TXT: bool = True
+
+    # Tagging configuration
+    ENABLE_LLM_TAGGING: bool = True
+    MAX_TAGS_PER_NOTE: int = 6
+    MAX_EXISTING_TAGS_IN_PROMPT: int = 150
+    MAX_TAGGER_SUMMARY_CHARS: int = 3000
+    MAX_TAGGER_TRANSCRIPT_CHARS: int = 1500
     
     # Markdown template
     MD_TEMPLATE: str = """---
@@ -78,7 +86,7 @@ date: {date}
 recording_date: {recording_date}
 source: {source_file}
 duration: {duration}
-tags: [transcription]
+tags: [{tags}]
 ---
 
 {summary}
@@ -124,6 +132,9 @@ tags: [transcription]
             # Default to ~/.olympus_transcriber/recordings for staging
             self.LOCAL_RECORDINGS_DIR = Path.home() / ".olympus_transcriber" / "recordings"
         
+        if self.PROCESS_LOCK_FILE is None:
+            self.PROCESS_LOCK_FILE = Path.home() / ".olympus_transcriber" / "transcriber.lock"
+        
         if self.AUDIO_EXTENSIONS is None:
             self.AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".wma"}
         
@@ -159,6 +170,9 @@ tags: [transcription]
             if not self.LLM_API_KEY:
                 # Logger will be initialized later, just disable feature
                 self.ENABLE_SUMMARIZATION = False
+
+        if self.ENABLE_LLM_TAGGING and not self.ENABLE_SUMMARIZATION:
+            self.ENABLE_LLM_TAGGING = False
     
     def ensure_directories(self) -> None:
         """Create necessary directories if they don't exist."""

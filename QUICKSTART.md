@@ -278,6 +278,28 @@ make reload-daemon
 launchctl list | grep olympus
 ```
 
+### Whisper zgłasza błąd Metal (-6)
+
+Od wersji 1.7.1 aplikacja automatycznie wykrywa komunikaty typu
+`ggml_metal_device_init: tensor API disabled` i uruchamia ponownie
+transkrypcję w trybie CPU. Jeśli chcesz całkowicie wyłączyć Core ML:
+
+```bash
+export WHISPER_COREML=0
+python -m src.main
+```
+
+### Proces zablokowany przez lock file
+
+Jeżeli w logach pojawia się komunikat
+`Skipping process_recorder because another instance holds lock`, oznacza to,
+że inna instancja wciąż działa lub zostawiła plik blokady.
+
+```bash
+ls ~/.olympus_transcriber/transcriber.lock
+rm ~/.olympus_transcriber/transcriber.lock  # tylko gdy masz pewność, że daemon nie działa
+```
+
 ### Testy nie przechodzą
 
 ```bash

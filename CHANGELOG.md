@@ -404,6 +404,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rozszerzono sekcję "Configuration" w `INSTALLATION-GUIDE` o instrukcje dla wielu komputerów
 - Przykłady konfiguracji przez `.env` i `~/.zshrc`
 
+## [1.7.1] - 2025-11-25
+
+### Added
+- File-based process lock to ensure tylko jedna instancja transkrybera działa jednocześnie
+- Dokumentacja troubleshootingu opisująca obsługę błędów Metal oraz ręczne usuwanie lock file
+
+### Fixed
+- whisper.cpp fallback wykrywa teraz komunikaty `ggml_metal`/`MTLLibrar` i automatycznie przełącza się na CPU,
+  co eliminuje serię błędów `Return code -6`
+- Zabezpieczono workflow przed ponownym kopiowaniem/przetwarzaniem, gdy druga instancja startuje równolegle
+
+## [1.8.0] - 2025-11-25
+
+### Added
+- **Automatyczne tagowanie transkrypcji przez LLM**:
+  - Claude API generuje do 6 tagów Obsidian dla każdego nowego nagrania
+  - Tagi oparte na transkrypcji, podsumowaniu i istniejącym słowniku tagów
+  - Inteligentna deduplikacja i normalizacja tagów (polskie znaki → ASCII)
+  - Tagi dodawane do YAML frontmatter w formacie `tags: [tag1, tag2, ...]`
+- **Indeksowanie tagów z całego vaulta** (`src/tag_index.py`):
+  - `TagIndex` skanuje wszystkie pliki `.md` w `TRANSCRIBE_DIR`
+  - Normalizuje tagi (usuwa polskie znaki, spacje → myślniki)
+  - Utrzymuje mapowanie `normalized → original` dla zachowania spójności
+  - Metody: `build_index()`, `existing_tags()`, `normalize_tag()`, `sanitize_tag_value()`
+- **Moduł taggera** (`src/tagger.py`):
+  - Abstrakcyjna klasa `BaseTagger` dla różnych dostawców LLM
+  - Implementacja `ClaudeTagger` z obsługą API Anthropic
+  - Prompt construction z obsługą existing_tags (do 150 tagów w promptcie)
+  - Timeout 10s, graceful fallback przy błędzie API
+  - Funkcja `get_tagger()` dla łatwego tworzenia instancji
+- **Skrypt retagowania istniejących transkrypcji** (`scripts/retag_existing_transcripts.py`):
+  - Masowe dodanie tagów do plików `.md` bez tagów lub z samym `[transcription]`
+  - Parsowanie YAML frontmatter, ekstrakcja transkryptu i podsumowania
+  - Dry-run mode (preview zmian bez zapisu)
+  - Szczegółowe logowanie zmian i błędów
+  - Wykorzystuje `TagIndex` i `ClaudeTagger`
+- **Konfiguracja tagowania** w `src/config.py`:
+  - `ENABLE_LLM_TAGGING` (bool, default: True)
+  - `MAX_TAGS_PER_NOTE` (int, default: 6)
+  - `MAX_EXISTING_TAGS_IN_PROMPT` (int, default: 150)
+  - `MAX_TAGGER_SUMMARY_CHARS` (int, default: 3000)
+  - `MAX_TAGGER_TRANSCRIPT_CHARS` (int, default: 1500)
+- **Rozszerzona dokumentacja** w `QUICKSTART.md`:
+  - Sekcja "LLM Tagging" z instrukcją konfiguracji
+  - Użycie skryptu retagowania
+  - Troubleshooting tagowania
+
+### Changed
+- **Transcriber workflow** (`src/transcriber.py`):
+  - Po wygenerowaniu podsumowania następuje automatyczne tagowanie (jeśli włączone)
+  - `TagIndex` budowany przy starcie transkrybera
+  - Tagi przekazywane do `markdown_generator.create_markdown()`
+  - Log: "🏷️  Generated N tags: [tag1, tag2, ...]"
+- **MarkdownGenerator** (`src/markdown_generator.py`):
+  - Metoda `create_markdown()` przyjmuje opcjonalny parametr `tags: Optional[List[str]]`
+  - Default `tags=["transcription"]` jeśli nie podano
+  - Template zmieniony: `tags: [{tags}]` zamiast `tags: [transcription]`
+  - Tagi renderowane jako `tag1, tag2, tag3` w YAML frontmatter
+- **Ulepszona detekcja błędów Metal/Core ML** (`src/transcriber.py`):
+  - Nowa metoda `_should_retry_without_coreml()` dla precyzyjnej detekcji
+  - Wykrywanie komunikatów: `ggml_metal`, `MTLLibrar`, `Core ML`, `tensor API disabled`
+  - Automatyczny retry z flagą `use_coreml=False` przy wykryciu Metal error
+  - Lepsza separacja logiki retry vs. błąd fatalny
+
+### Fixed
+- **Deduplikacja tagów**: TagIndex zapobiega duplikatom z polskimi znakami (np. `organizacja` vs `organizacja`)
+- **Graceful fallback**: Jeśli `ENABLE_SUMMARIZATION=False`, automatycznie wyłącza `ENABLE_LLM_TAGGING`
+- **Empty tag handling**: `sanitize_tag_value()` zwraca pusty string zamiast błędu dla niepoprawnych tagów
+
+### Dependencies
+- Istniejąca zależność `anthropic>=0.8.0` wykorzystana dla tagowania (bez nowych pakietów)
+
+### Technical Details
+- **Abstrakcja taggera**: `BaseTagger` umożliwia łatwą integrację innych dostawców (OpenAI, Ollama)
+- **Normalizacja tagów**: Polskie znaki (`ą`, `ć`, `ę`, ...) → ASCII (`a`, `c`, `e`, ...)
+- **Sanityzacja tagów**: Spacje → myślniki, usunięcie niedozwolonych znaków, lowercase
+- **Thread-safe tag indexing**: Index budowany raz przy starcie, używany wielokrotnie
+- **Graceful degradation**: Brak API key → tagowanie wyłączone, log warning, workflow kontynuowany
+- **Prompt engineering**: 
+  - Krótkie fragmenty (3000 chars summary, 1500 chars transcript)
+  - Existing tags w liście po przecinku
+  - JSON output `{"tags": ["tag1", "tag2", ...]}`
+- **Retry logic**: Błąd API → return empty list, nie przerywa transkrypcji
+
+### Testing
+- Nowe testy `tests/test_tagger.py`:
+  - `test_tagger_normalize_tag()` - normalizacja polskich znaków
+  - `test_tagger_sanitize_tag()` - sanityzacja do formatu Obsidian
+  - `test_tagger_generate_tags_mock()` - mockowanie Claude API
+  - `test_tagger_api_error_graceful()` - obsługa błędów API
+- Nowe testy `tests/test_tag_index.py`:
+  - `test_tag_index_build()` - indeksowanie plików markdown
+  - `test_tag_index_existing_tags()` - ekstrakcja tagów z vaulta
+- Rozszerzone testy `tests/test_transcriber.py`:
+  - `test_transcriber_with_tagging()` - integracja tagowania w workflow
+  - `test_should_retry_without_coreml()` - detekcja błędów Metal
+- Rozszerzone testy `tests/test_markdown_generator.py`:
+  - `test_create_markdown_with_tags()` - custom tagi w YAML frontmatter
+
+### Known Limitations
+- Tagowanie wymaga `ENABLE_SUMMARIZATION=True` i ważnego API key Anthropic
+- Skrypt `retag_existing_transcripts.py` nie obsługuje plików spoza `TRANSCRIBE_DIR`
+- Maksymalnie 150 existing tags w promptcie (ograniczenie context length)
+- Timeout API 10s może być za krótki dla bardzo długich transkrypcji
+
 ## [Unreleased - Future]
 
 ### Planned Features
@@ -434,6 +539,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.8.0** (2025-11-25) - LLM-based automatic tagging, tag indexing, retag script
+- **1.7.1** (2025-11-25) - Process lock + rozszerzony fallback Metal → CPU
 - **1.7.0** (2025-11-25) - Multi-computer support with OLYMPUS_TRANSCRIBE_DIR configuration
 - **1.6.1** (2025-11-25) - Enhanced markdown formatting and Claude prompts
 - **1.6.0** (2025-11-25) - Local staging workflow for robust transcription, improved batch failure handling

@@ -47,8 +47,8 @@ class OlympusMenuApp(rumps.App):
             )
 
         super(OlympusMenuApp, self).__init__(
-            "Olympus Transcriber",
-            template=True
+            "🎙️",
+            template=False
         )
 
         self.transcriber: Optional[OlympusTranscriber] = None
