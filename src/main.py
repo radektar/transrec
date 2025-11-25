@@ -1,17 +1,11 @@
 """Main entry point for Olympus Transcriber daemon."""
 
 import sys
-from pathlib import Path
 
-# Load environment variables from .env file if it exists
-try:
-    from dotenv import load_dotenv
-    env_path = Path(__file__).parent.parent / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
-except ImportError:
-    # python-dotenv not installed, skip .env loading
-    pass
+from src.env_loader import load_env_file
+
+# Load environment variables before importing config-dependent modules
+load_env_file()
 
 from src.logger import logger
 from src.app_core import OlympusTranscriber

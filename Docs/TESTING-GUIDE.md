@@ -60,10 +60,37 @@ tests/test_config.py::test_config_paths PASSED                   [ 33%]
 tests/test_config.py::test_config_audio_extensions PASSED        [ 50%]
 tests/test_transcriber.py::test_transcriber_initialization PASSED [ 66%]
 tests/test_transcriber.py::test_find_audio_files PASSED          [ 83%]
+tests/test_transcriber.py::test_stage_audio_file_success PASSED [ 90%]
+tests/test_transcriber.py::test_process_recorder_batch_failure_handling PASSED [100%]
 tests/test_file_monitor.py::test_file_monitor_start PASSED       [100%]
 
-========================= 6 passed in 2.50s ============================
+========================= 8 passed in 2.50s ============================
 ```
+
+### Staging Tests
+
+The staging functionality ensures files are copied to a local directory before transcription, making the process robust to recorder unmounting:
+
+**Test: Staging Success**
+```bash
+pytest tests/test_transcriber.py::test_stage_audio_file_success -v
+```
+
+**Test: Staging Failure Handling**
+```bash
+pytest tests/test_transcriber.py::test_stage_audio_file_not_found -v
+```
+
+**Test: Batch Failure Logic**
+```bash
+pytest tests/test_transcriber.py::test_process_recorder_batch_failure_handling -v
+```
+
+These tests verify:
+- Files are correctly copied to `LOCAL_RECORDINGS_DIR`
+- Existing staged copies are reused when appropriate
+- `last_sync` is not updated if any file in batch fails
+- Staging failures are handled gracefully
 
 ---
 
@@ -577,6 +604,8 @@ ls -la ~/.olympus_transcriber_state.json
 ---
 
 For more troubleshooting, see `DEVELOPMENT.md` and application logs.
+
+
 
 
 

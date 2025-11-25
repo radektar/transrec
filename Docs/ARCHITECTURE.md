@@ -82,11 +82,18 @@ FileMonitor
 Transcriber
 ├── find_recorder()             # Znaleź /Volumes/LS-P1
 ├── find_audio_files()          # Znaleź nowe .mp3/.wav
+├── _stage_audio_file()         # Skopiuj plik do lokalnego stagingu
 ├── get_last_sync_time()        # Pobierz czas ostatniego sync
 ├── save_sync_time()            # Zapisz czas sync
-├── transcribe_file()           # Transkrybuj jeden plik
+├── transcribe_file()           # Transkrybuj jeden plik (na staged copy)
 └── process_recorder()          # Główny workflow
 ```
+
+**Staging Workflow:**
+- Pliki z recordera są kopiowane do `LOCAL_RECORDINGS_DIR` przed transkrypcją
+- To zapewnia stabilność nawet gdy recorder się odmontowuje podczas przetwarzania
+- Pliki na rejestratorze pozostają nietknięte (nie są kasowane ani przenoszone)
+- Jeśli staging się nie powiedzie (np. recorder odmontowany), plik jest pomijany i `last_sync` nie jest aktualizowany
 
 **Workflow:**
 ```
@@ -95,12 +102,14 @@ process_recorder()
   ├─ get_last_sync_time()
   ├─ find_audio_files(since=last_sync)
   └─ for each file:
-      └─ transcribe_file()
+      ├─ _stage_audio_file()  # Copy to local staging directory
+      │   └─ shutil.copy2() preserves mtime and metadata
+      └─ transcribe_file(staged_file)
           ├─ check if already done (state file)
-          ├─ run MacWhisper subprocess
+          ├─ run whisper.cpp subprocess (on local copy)
           ├─ handle timeout/errors
-          └─ save to ~/Documents/Transcriptions/
-  └─ save_sync_time()
+          └─ save to TRANSCRIBE_DIR/
+  └─ save_sync_time()  # Only if ALL files succeeded
 ```
 
 ### 3. Main Process (`src/main.py`)
@@ -154,8 +163,9 @@ Centralizowana konfiguracja:
 Config:
   RECORDER_NAMES          # Nazwy możliwych voluminów
   TRANSCRIBE_DIR          # Gdzie zapisywać transkrypcje
+  LOCAL_RECORDINGS_DIR    # Lokalny staging dla kopii plików z recordera
   STATE_FILE              # Gdzie śledzić sync state
-  MACWHISPER_PATHS        # Lokalizacje MacWhisper
+  WHISPER_CPP_PATH        # Ścieżka do whisper.cpp binary
   TRANSCRIPTION_TIMEOUT   # Maksymalny czas transkrypcji
 ```
 

@@ -248,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS native notifications for key events (recorder detected, files found, transcription complete)
 - Helper script `scripts/restart_daemon.sh` for easy daemon management
 - Improved LaunchAgent configuration (uses `python -m src.main` for better module resolution)
+- `start_menu_app.command` + Login Item instructions for automatic tray app startup
 
 ### Changed
 - Daemon now sends system notifications visible in Notification Center
@@ -268,6 +269,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed `ModuleNotFoundError: No module named 'src'` in LaunchAgent mode
+
+## [1.5.2] - 2025-11-24
+
+### Fixed
+- **Notification spam**: Fixed repeated "Recorder wykryty" notifications on periodic checks
+  - Notifications now only sent on first recorder detection
+  - Periodic checks no longer trigger false "new connection" notifications
+- **Unnecessary delays**: Removed 5-second post-mount rescan delay
+  - System no longer waits and retries when no new files are found
+  - Faster processing workflow
+
+### Changed
+- Added `recorder_was_notified` flag to track notification state
+- `recorder_monitoring` flag now remains `True` while recorder is connected
+- Improved state management for periodic check vs. mount event distinction
+
+### Removed
+- `POST_MOUNT_RESYNC_DELAY` configuration option (no longer needed)
+- 5-second wait and retry logic after mount
+
+## [1.6.0] - 2025-11-25
+
+### Added
+- **Local staging workflow** for robust transcription processing
+  - Audio files are now copied to local staging directory before transcription
+  - Staging directory: `~/.olympus_transcriber/recordings/` (configurable via `LOCAL_RECORDINGS_DIR`)
+  - Transcription works on local copies, making process resilient to recorder unmounting
+  - Original files on recorder remain untouched (never deleted or moved)
+- **Improved batch failure handling**
+  - `last_sync` timestamp is only updated when ALL files in batch succeed
+  - Failed files remain in queue for retry on next sync
+  - Prevents losing unprocessed files when batch has partial failures
+- **Staging reuse optimization**
+  - Existing staged copies are reused if size and mtime match
+  - Reduces unnecessary file copying on repeated processing
+- **Comprehensive staging tests**
+  - Unit tests for staging functionality (`test_stage_audio_file_*`)
+  - Integration tests for staging workflow (`test_process_recorder_staging_integration`)
+  - Batch failure handling tests (`test_process_recorder_batch_*`)
+- **End-to-end test scripts**
+  - `test_staging_e2e.sh` - Full E2E test with recorder
+  - `test_staging_e2e_wait.sh` - E2E test that waits for recorder connection
+
+### Changed
+- **Transcription workflow** now uses staging:
+  1. Files are discovered on recorder
+  2. Each file is copied to local staging directory (`_stage_audio_file()`)
+  3. Transcription runs on staged copy (not original recorder file)
+  4. Original files on recorder remain untouched
+- **Batch processing logic**:
+  - Tracks successes and failures separately (`processed_success`, `processed_failed`)
+  - State file (`last_sync`) only updated if `processed_failed == 0`
+  - Failed files will be retried on next recorder connection
+- **Configuration**:
+  - Added `LOCAL_RECORDINGS_DIR` configuration option (default: `~/.olympus_transcriber/recordings/`)
+  - Staging directory is automatically created by `ensure_directories()`
+
+### Fixed
+- **Recorder unmounting during transcription**: System now handles unstable recorder mounting
+  - Files are staged locally before processing
+  - Transcription continues even if recorder unmounts mid-process
+  - No more "input file not found" errors from unstable mounts
+- **Lost files on batch failure**: Files that fail in a batch are no longer lost
+  - `last_sync` not updated if any file fails
+  - Failed files remain in queue for next sync attempt
+
+### Technical Details
+- Staging uses `shutil.copy2()` to preserve file metadata and mtime
+- Staging directory structure mirrors recorder structure (same filenames)
+- Error handling for staging failures (FileNotFoundError, OSError)
+- Logging includes staging activity (DEBUG level: "📋 Staging file", "✓ Staged")
+
+### Documentation
+- Updated `ARCHITECTURE.md` with staging workflow description
+- Updated `API.md` with `_stage_audio_file()` method documentation
+- Updated `TESTING-GUIDE.md` with staging test instructions
+- Updated `DEVELOPMENT.md` with staging workflow section and debugging tips
+
+### Testing
+- All staging-related unit tests pass (6/6)
+- All transcriber tests pass (21/21)
+- E2E tests confirm staging works correctly with real recorder
+- Verified files remain on recorder after processing
 
 ## [Unreleased - Future]
 
@@ -299,6 +383,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.6.0** (2025-11-25) - Local staging workflow for robust transcription, improved batch failure handling
+- **1.5.2** (2025-11-24) - Fixed notification spam and removed unnecessary delays
+- **1.5.1** (2025-11-24) - Native notifications and daemon improvements
 - **1.5.0** (2025-11-20) - macOS menu bar app with real-time status and GUI controls
 - **1.4.1** (2025-11-20) - Helper scripts for memory reset workflow
 - **1.4.0** (2025-11-20) - Markdown output with Claude AI summarization

@@ -32,6 +32,7 @@ class Config:
         SUMMARY_MAX_WORDS: Maximum words in generated summary
         TITLE_MAX_LENGTH: Maximum length for generated title (characters)
         DELETE_TEMP_TXT: Whether to delete temporary TXT files after MD creation
+        LOCAL_RECORDINGS_DIR: Local staging directory for copied recorder files
     """
     
     # Recorder detection
@@ -40,6 +41,7 @@ class Config:
     # Directories
     TRANSCRIBE_DIR: Path = None
     LOG_DIR: Path = None
+    LOCAL_RECORDINGS_DIR: Path = None  # Local staging area for recorder files
     
     # Files
     STATE_FILE: Path = None
@@ -107,6 +109,10 @@ tags: [transcription]
         if self.LOG_FILE is None:
             self.LOG_FILE = self.LOG_DIR / "olympus_transcriber.log"
         
+        if self.LOCAL_RECORDINGS_DIR is None:
+            # Default to ~/.olympus_transcriber/recordings for staging
+            self.LOCAL_RECORDINGS_DIR = Path.home() / ".olympus_transcriber" / "recordings"
+        
         if self.AUDIO_EXTENSIONS is None:
             self.AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".wma"}
         
@@ -147,6 +153,7 @@ tags: [transcription]
         """Create necessary directories if they don't exist."""
         self.TRANSCRIBE_DIR.mkdir(parents=True, exist_ok=True)
         self.LOG_DIR.mkdir(parents=True, exist_ok=True)
+        self.LOCAL_RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # Global configuration instance

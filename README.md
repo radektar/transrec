@@ -164,6 +164,23 @@ python src/menu_app.py
 
 Po uruchomieniu, aplikacja pojawi się w pasku menu (obok zegara). Kliknij ikonę, aby zobaczyć menu z opcjami.
 
+#### Automatyczny start przez Login Item
+
+Jeżeli chcesz, aby tray app uruchamiała się automatycznie po zalogowaniu:
+
+1. Upewnij się, że skrypt ma prawa wykonywania:
+   ```bash
+   chmod +x start_menu_app.command
+   ```
+2. Otwórz **System Settings → General → Login Items**.
+3. Kliknij `+` i wybierz plik `start_menu_app.command` z katalogu projektu.
+4. Po następnym logowaniu tray app wystartuje w tle (logi: `~/Library/Logs/olympus_menu_app.log`).
+
+Skrypt możesz też uruchomić ręcznie:
+```bash
+./start_menu_app.command
+```
+
 ### Automatyczny tryb (LaunchAgent)
 
 Po instalacji przez `setup.sh`, aplikacja działa w tle automatycznie:

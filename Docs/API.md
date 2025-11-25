@@ -266,12 +266,46 @@ files = transcriber.find_audio_files(recorder, since)
 print(f"Found {len(files)} new files")
 ```
 
-##### `transcribe_file(audio_file: Path) -> bool`
+##### `_stage_audio_file(audio_file: Path) -> Optional[Path]`
 
-Transcribe a single audio file using MacWhisper.
+Copy audio file from recorder to local staging directory.
+
+This method creates a local copy of the recorder file before transcription,
+ensuring transcription can proceed even if the recorder unmounts during
+processing. The staged file preserves the original filename and modification
+time.
 
 **Parameters:**
-- `audio_file`: Path to audio file
+- `audio_file`: Path to audio file on recorder (e.g., `/Volumes/LS-P1/...`)
+
+**Returns:**
+- `Path`: Path to staged file in `LOCAL_RECORDINGS_DIR`, or `None` if staging failed
+
+**Behavior:**
+- Creates staging directory if it doesn't exist
+- Uses `shutil.copy2()` to preserve metadata and mtime
+- Reuses existing staged copy if size and mtime match
+- Handles `FileNotFoundError` and `OSError` gracefully (returns `None`)
+
+**Example:**
+```python
+from pathlib import Path
+
+recorder_file = Path("/Volumes/LS-P1/RECORDER/FOLDER_E/251118_0058.MP3")
+staged_path = transcriber._stage_audio_file(recorder_file)
+
+if staged_path:
+    print(f"Staged to: {staged_path}")
+else:
+    print("Staging failed - recorder may have unmounted")
+```
+
+##### `transcribe_file(audio_file: Path) -> bool`
+
+Transcribe a single audio file using whisper.cpp.
+
+**Parameters:**
+- `audio_file`: Path to audio file (typically a staged copy from `LOCAL_RECORDINGS_DIR`)
 
 **Returns:**
 - `True`: Transcription succeeded
@@ -281,20 +315,25 @@ Transcribe a single audio file using MacWhisper.
 ```python
 from pathlib import Path
 
-audio = Path("/Volumes/LS-P1/recording.mp3")
-success = transcriber.transcribe_file(audio)
+# File should be staged first
+staged_file = Path("~/.olympus_transcriber/recordings/recording.mp3")
+success = transcriber.transcribe_file(staged_file)
 
 if success:
     print("Transcription complete")
 ```
 
 **Behavior:**
-- Checks if MacWhisper is available
-- Checks if already transcribed
+- Checks if whisper.cpp is available
+- Checks if already transcribed (by checking markdown files with matching `source:` field)
 - Tracks in-progress transcriptions
-- Runs MacWhisper subprocess with timeout
+- Runs whisper.cpp subprocess with timeout
+- Generates summary using LLM (if configured)
+- Creates markdown document with YAML frontmatter
 - Saves output to `TRANSCRIBE_DIR`
 - Logs all events
+
+**Note:** This method expects a local file path (staged copy), not a path on the recorder volume.
 
 ##### `process_recorder() -> None`
 
@@ -309,14 +348,20 @@ transcriber.process_recorder()
 1. Find recorder
 2. Get last sync time
 3. Find new audio files
-4. Transcribe each file
-5. Save sync time
+4. For each file:
+   - Stage file to local directory (`_stage_audio_file()`)
+   - Transcribe staged file (`transcribe_file()`)
+5. Save sync time (only if ALL files succeeded)
 
 **Behavior:**
 - Logs detailed progress
 - Handles errors gracefully
 - Updates `recorder_monitoring` flag
-- Reports success/failure counts
+- Tracks successes and failures separately
+- **Critical:** Only updates `last_sync` if all files in batch succeeded
+  - If any file fails (staging or transcription), `last_sync` is NOT updated
+  - This prevents losing unprocessed files that will be retried on next sync
+- Reports success/failure counts in logs
 
 ---
 
@@ -568,6 +613,8 @@ except Exception as e:
 
 For implementation details, see source code in `src/` directory.
 For usage examples, see `README.md` and `DEVELOPMENT.md`.
+
+
 
 
 

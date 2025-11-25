@@ -142,6 +142,60 @@ def test_transcribe(mock_run):
     # Test code here
 ```
 
+## 📋 Staging Workflow
+
+### Overview
+
+The transcription system uses a **staging workflow** to ensure reliability when working with external recorder devices that may unmount during processing.
+
+### How It Works
+
+1. **File Discovery**: `find_audio_files()` scans the recorder for new files
+2. **Staging**: `_stage_audio_file()` copies each file to `LOCAL_RECORDINGS_DIR` (default: `~/.olympus_transcriber/recordings`)
+3. **Transcription**: `transcribe_file()` processes the staged copy (not the original)
+4. **State Management**: `last_sync` is only updated if ALL files in batch succeeded
+
+### Key Benefits
+
+- **Stability**: Transcription continues even if recorder unmounts mid-process
+- **Data Safety**: Original files on recorder are never modified or deleted
+- **Error Recovery**: Failed files remain in queue (not lost) if staging fails
+
+### Configuration
+
+Staging directory is configured in `src/config.py`:
+
+```python
+LOCAL_RECORDINGS_DIR: Path = None  # Defaults to ~/.olympus_transcriber/recordings
+```
+
+### Testing Staging
+
+```bash
+# Test staging functionality
+pytest tests/test_transcriber.py::test_stage_audio_file_success -v
+
+# Test batch failure handling
+pytest tests/test_transcriber.py::test_process_recorder_batch_failure_handling -v
+```
+
+### Debugging Staging Issues
+
+**Check staging directory:**
+```bash
+ls -la ~/.olympus_transcriber/recordings/
+```
+
+**Monitor staging in logs:**
+```bash
+tail -f ~/Library/Logs/olympus_transcriber.log | grep -i stage
+```
+
+**Common Issues:**
+- Staging fails → Check disk space and permissions
+- Files not reused → Verify mtime preservation with `shutil.copy2()`
+- Batch failures → Check logs for specific error messages
+
 ## 🔄 Development Cycle
 
 ### 1. Create Feature Branch
@@ -429,6 +483,8 @@ Closes #123
 - Check `README.md` for usage guide
 - Check logs for errors
 - Open an issue on GitHub
+
+
 
 
 

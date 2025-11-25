@@ -55,6 +55,7 @@ class Transcriber:
         transcription_in_progress: Track files currently being transcribed
         whisper_available: Flag indicating if Whisper CLI is available
         recorder_monitoring: Flag if recorder is currently connected
+        recorder_was_notified: Flag to track if connection notification was sent
         state_updater: Optional callback to update application state
     """
     
@@ -63,6 +64,7 @@ class Transcriber:
         self.transcription_in_progress: Dict[str, bool] = {}
         self.whisper_available = self._check_whisper()
         self.recorder_monitoring = False
+        self.recorder_was_notified = False
         self.state_updater: Optional[Callable[[AppStatus, Optional[str], Optional[str]], None]] = None
         
         # Initialize summarizer and markdown generator
@@ -221,6 +223,70 @@ class Transcriber:
         new_files.sort(key=lambda x: x.stat().st_mtime)
         
         return new_files
+    
+    def _stage_audio_file(self, audio_file: Path) -> Optional[Path]:
+        """Copy audio file from recorder to local staging directory.
+        
+        Creates a local copy of the recorder file in the staging directory.
+        This allows transcription to proceed even if the recorder unmounts
+        during processing. The staged file preserves the original filename
+        and modification time.
+        
+        Args:
+            audio_file: Path to audio file on recorder (e.g., /Volumes/LS-P1/...)
+            
+        Returns:
+            Path to staged file in LOCAL_RECORDINGS_DIR, or None if staging failed
+        """
+        try:
+            # Ensure staging directory exists
+            config.LOCAL_RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+            
+            # Destination path (same filename as original)
+            staged_path = config.LOCAL_RECORDINGS_DIR / audio_file.name
+            
+            # Check if file already exists and matches (size and mtime)
+            if staged_path.exists():
+                try:
+                    source_stat = audio_file.stat()
+                    staged_stat = staged_path.stat()
+                    
+                    # If size and mtime match, reuse existing copy
+                    if (source_stat.st_size == staged_stat.st_size and
+                        abs(source_stat.st_mtime - staged_stat.st_mtime) < 1.0):
+                        logger.debug(
+                            f"✓ Reusing existing staged copy: {audio_file.name}"
+                        )
+                        return staged_path
+                except OSError:
+                    # If we can't stat the source, try to copy anyway
+                    # (might be a race condition with unmounting)
+                    pass
+            
+            # Copy file with metadata preservation
+            logger.debug(f"📋 Staging file: {audio_file.name}")
+            shutil.copy2(audio_file, staged_path)
+            logger.debug(f"✓ Staged: {audio_file.name} -> {staged_path}")
+            
+            return staged_path
+            
+        except FileNotFoundError as e:
+            logger.warning(
+                f"⚠️  Could not stage {audio_file.name}: "
+                f"recorder may have unmounted ({e})"
+            )
+            return None
+        except OSError as e:
+            logger.warning(
+                f"⚠️  Could not stage {audio_file.name}: {e}"
+            )
+            return None
+        except Exception as e:
+            logger.error(
+                f"✗ Unexpected error staging {audio_file.name}: {e}",
+                exc_info=True
+            )
+            return None
     
     def _run_whisper_transcription(
         self, audio_file: Path, use_coreml: bool = True
@@ -624,18 +690,22 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
         if not recorder:
             logger.info("❌ Recorder not found")
             self.recorder_monitoring = False
+            self.recorder_was_notified = False
             self._update_state(AppStatus.IDLE)
             return
         
         logger.info(f"✓ Recorder detected: {recorder}")
-        self.recorder_monitoring = True
         
-        # Send notification about recorder detection
-        send_notification(
-            title="Olympus Transcriber",
-            subtitle="Recorder wykryty",
-            message=f"Podłączono: {recorder.name}"
-        )
+        # Send notification only if this is first detection (not periodic check)
+        if not self.recorder_was_notified:
+            send_notification(
+                title="Olympus Transcriber",
+                subtitle="Recorder wykryty",
+                message=f"Podłączono: {recorder.name}"
+            )
+            self.recorder_was_notified = True
+        
+        self.recorder_monitoring = True
         
         # Get last sync time
         last_sync = self.get_last_sync_time()
@@ -653,33 +723,72 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
                 message="Rozpoczynam transkrypcję..."
             )
         
-        # Transcribe each file
+        processed_success = 0
+        processed_failed = 0
+
+        # Process each file: stage first, then transcribe
         if new_files:
-            success_count = 0
-            for audio_file in new_files:
-                logger.info(f"Processing: {audio_file.name}")
-                if self.transcribe_file(audio_file):
-                    success_count += 1
+            for recorder_file in new_files:
+                logger.info(f"Processing: {recorder_file.name}")
+                
+                # Stage file to local directory
+                staged_file = self._stage_audio_file(recorder_file)
+                if staged_file is None:
+                    logger.warning(
+                        f"⚠️  Failed to stage {recorder_file.name}, "
+                        "skipping transcription"
+                    )
+                    processed_failed += 1
+                    continue
+                
+                # Transcribe using staged file
+                if self.transcribe_file(staged_file):
+                    processed_success += 1
+                else:
+                    processed_failed += 1
+                
                 # Small delay between files
                 time.sleep(1)
             
+            total_processed = processed_success + processed_failed
             logger.info(
                 f"✓ Transcription batch complete: "
-                f"{success_count}/{len(new_files)} succeeded"
+                f"{processed_success}/{total_processed} succeeded, "
+                f"{processed_failed}/{total_processed} failed"
             )
             
             # Send completion notification
             send_notification(
                 title="Olympus Transcriber",
                 subtitle="Transkrypcja zakończona",
-                message=f"Przetworzono: {success_count}/{len(new_files)} plików"
+                message=f"Przetworzono: {processed_success}/{total_processed} plików"
             )
         else:
             logger.info("ℹ️  No new files to transcribe")
         
-        # Save sync time
-        self.save_sync_time()
-        logger.info("✓ Sync complete")
+        # Only advance sync time if ALL files were successfully processed
+        # This prevents losing files that failed due to unmounting or other errors
+        if processed_failed == 0 and processed_success > 0:
+            self.save_sync_time()
+            logger.info("✓ Sync complete (state updated)")
+        elif processed_failed > 0:
+            logger.warning(
+                f"⚠️  Batch had {processed_failed} failure(s). "
+                "Not updating last_sync to avoid losing unprocessed files. "
+                "Failed files will be retried on next sync."
+            )
+        else:
+            logger.info(
+                "ℹ️  Skipping sync update (no files processed). "
+                "State remains at previous value."
+            )
         logger.info("=" * 60)
+        
+        # Keep recorder_monitoring True if recorder still connected
+        # This prevents notification spam on periodic checks
+        if not self.find_recorder():
+            self.recorder_monitoring = False
+            self.recorder_was_notified = False
+        
         self._update_state(AppStatus.IDLE)
 
