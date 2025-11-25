@@ -45,14 +45,25 @@ class TestClaudeSummarizer:
     
     def test_generate_success(self, summarizer, mock_anthropic):
         """Test successful summary generation."""
-        # Mock API response with markdown format
+        # Mock API response with enhanced markdown format
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
         mock_response.content[0].text = (
             "TITLE: Rozmowa o projekcie\n\n"
             "SUMMARY: ## Podsumowanie\n\n"
-            "Dyskusja na temat implementacji nowych funkcji. "
+            "Dyskusja na temat implementacji **nowych funkcji**. "
             "Omówiono kluczowe aspekty projektu.\n\n"
+            "## Kluczowe punkty\n\n"
+            "⚠️ **Krytyczne:**\n"
+            "- Decyzja o terminie wdrożenia\n\n"
+            "⚡ **Ważne:**\n"
+            "- Monitorowanie postępów\n\n"
+            "📝 **Informacyjne:**\n"
+            "- Kontekst projektu\n\n"
+            "## Cytaty\n\n"
+            "### Temat: Wdrożenie\n"
+            "> \"Musimy to wdrożyć do końca miesiąca\"\n"
+            "> — *Kontekst: Dyskusja o terminach*\n\n"
             "## Lista działań (To-do)\n\n"
             "- Przygotować dokumentację\n"
             "- Skontaktować się z zespołem"
@@ -66,7 +77,12 @@ class TestClaudeSummarizer:
         assert "summary" in result
         assert result["title"] == "Rozmowa o projekcie"
         assert "## Podsumowanie" in result["summary"]
+        assert "## Kluczowe punkty" in result["summary"]
+        assert "## Cytaty" in result["summary"]
         assert "## Lista działań (To-do)" in result["summary"]
+        assert "⚠️" in result["summary"]
+        assert "⚡" in result["summary"]
+        assert "📝" in result["summary"]
         assert "Dyskusja" in result["summary"]
         mock_anthropic.messages.create.assert_called_once()
     
@@ -77,9 +93,14 @@ class TestClaudeSummarizer:
         assert "title" in result
         assert "summary" in result
         assert result["title"] == "Nagranie"
-        # Fallback summary should include markdown structure
+        # Fallback summary should include markdown structure with all sections
         assert "## Podsumowanie" in result["summary"]
+        assert "## Kluczowe punkty" in result["summary"]
+        assert "## Cytaty" in result["summary"]
         assert "## Lista działań (To-do)" in result["summary"]
+        assert "⚠️" in result["summary"]
+        assert "⚡" in result["summary"]
+        assert "📝" in result["summary"]
     
     def test_generate_long_transcript_truncation(self, summarizer, mock_anthropic):
         """Test that long transcripts are truncated."""
@@ -111,12 +132,17 @@ class TestClaudeSummarizer:
         transcript = "Test transcript"
         result = summarizer.generate(transcript)
         
-        # Should return fallback summary with markdown structure
+        # Should return fallback summary with markdown structure including all sections
         assert "title" in result
         assert "summary" in result
         assert result["title"] == "Test transcript"
         assert "## Podsumowanie" in result["summary"]
+        assert "## Kluczowe punkty" in result["summary"]
+        assert "## Cytaty" in result["summary"]
         assert "## Lista działań (To-do)" in result["summary"]
+        assert "⚠️" in result["summary"]
+        assert "⚡" in result["summary"]
+        assert "📝" in result["summary"]
     
     def test_title_length_limit(self, summarizer, mock_anthropic):
         """Test that title is truncated to max length."""
@@ -140,6 +166,12 @@ class TestClaudeSummarizer:
             "TITLE: Test Title\n\n"
             "SUMMARY: ## Podsumowanie\n\n"
             "Test summary text here.\n\n"
+            "## Kluczowe punkty\n\n"
+            "⚠️ **Krytyczne:**\n"
+            "- Test point\n\n"
+            "## Cytaty\n\n"
+            "### Temat: Test\n"
+            "> \"Test quote\"\n\n"
             "## Lista działań (To-do)\n\n"
             "- Przygotować dokumentację\n"
             "- Skontaktować się z zespołem"
@@ -148,6 +180,8 @@ class TestClaudeSummarizer:
         
         assert title == "Test Title"
         assert "## Podsumowanie" in summary
+        assert "## Kluczowe punkty" in summary
+        assert "## Cytaty" in summary
         assert "## Lista działań (To-do)" in summary
         assert "Test summary" in summary
     
@@ -162,15 +196,26 @@ class TestClaudeSummarizer:
         assert "## Podsumowanie" in summary
     
     def test_summary_markdown_structure(self, summarizer, mock_anthropic):
-        """Test that summary contains proper markdown structure with both sections."""
+        """Test that summary contains proper markdown structure with all sections."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock()]
         mock_response.content[0].text = (
             "TITLE: Spotkanie projektowe\n\n"
             "SUMMARY: ## Podsumowanie\n\n"
-            "Podczas spotkania omówiono kluczowe aspekty projektu. "
+            "Podczas spotkania omówiono **kluczowe aspekty** projektu. "
             "Zidentyfikowano główne wyzwania i możliwości rozwoju. "
             "Ustalone zostały priorytety na najbliższe tygodnie.\n\n"
+            "## Kluczowe punkty\n\n"
+            "⚠️ **Krytyczne:**\n"
+            "- Ustalenie terminów wdrożenia\n\n"
+            "⚡ **Ważne:**\n"
+            "- Monitorowanie postępów\n\n"
+            "📝 **Informacyjne:**\n"
+            "- Kontekst projektu\n\n"
+            "## Cytaty\n\n"
+            "### Temat: Priorytety\n"
+            "> \"Musimy ustalić priorytety na najbliższe tygodnie\"\n"
+            "> — *Kontekst: Dyskusja o planowaniu*\n\n"
             "## Lista działań (To-do)\n\n"
             "- Przygotować szczegółową dokumentację techniczną\n"
             "- Skontaktować się z zespołem deweloperskim\n"
@@ -180,9 +225,15 @@ class TestClaudeSummarizer:
         
         result = summarizer.generate("Test transcript")
         
-        # Verify structure
+        # Verify structure with all new sections
         assert "## Podsumowanie" in result["summary"]
+        assert "## Kluczowe punkty" in result["summary"]
+        assert "## Cytaty" in result["summary"]
         assert "## Lista działań (To-do)" in result["summary"]
+        # Verify emoji are present
+        assert "⚠️" in result["summary"]
+        assert "⚡" in result["summary"]
+        assert "📝" in result["summary"]
         # Verify summary content
         assert "omówiono" in result["summary"] or "Podczas" in result["summary"]
         # Verify to-do list items

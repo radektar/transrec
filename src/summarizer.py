@@ -7,6 +7,8 @@ from typing import Dict, Optional, Tuple
 from src.config import config
 from src.logger import logger
 
+Anthropic = None  # type: ignore[assignment]
+
 
 class BaseSummarizer(ABC):
     """Base class for transcript summarizers.
@@ -45,13 +47,16 @@ class ClaudeSummarizer(BaseSummarizer):
             api_key: Anthropic API key
             model: Claude model name
         """
+        global Anthropic
         try:
-            from anthropic import Anthropic
+            from anthropic import Anthropic as AnthropicClient
         except ImportError:
             raise ImportError(
                 "anthropic package not installed. "
                 "Install with: pip install anthropic"
             )
+        if Anthropic is None:
+            Anthropic = AnthropicClient
         
         self.client = Anthropic(api_key=api_key)
         self.model = model
@@ -137,21 +142,60 @@ class ClaudeSummarizer(BaseSummarizer):
         return f"""Przeanalizuj poniższą transkrypcję nagrania audio i wygeneruj:
 
 1. KRÓTKI TYTUŁ (maksymalnie {self.title_max_length} znaków) - powinien być zwięzły i opisowy
-2. PODSUMOWANIE w formacie markdown zawierające:
-   - Sekcję "## Podsumowanie" z 5-7 zdaniami opisującymi kluczowe spostrzeżenia ze spotkania
-   - Sekcję "## Lista działań (To-do)" z 3-5 konkretnymi zadaniami do wykonania po spotkaniu
-   - Każde zadanie powinno być w formie listy punktowanej (zaczynającej się od "-")
+
+2. PODSUMOWANIE w formacie markdown zawierające następujące sekcje:
+
+   ## Podsumowanie
+   - 5-7 zdań opisujących kluczowe spostrzeżenia ze spotkania
+   - Używaj **pogrubienia** dla najważniejszych pojęć, decyzji i zobowiązań
+   - Używaj *kursywy* dla dodatkowego kontekstu lub uwag
+   - Możesz używać blockquotes (`>`) dla ważnych stwierdzeń
+   - Wykorzystuj pełne możliwości markdown: listy numerowane, tabele (gdy odpowiednie), separatory (`---`)
+
+   ## Kluczowe punkty
+   - Sekcja z punktami podzielonymi według priorytetu używając emoji:
+     - ⚠️ **Krytyczne:** Najważniejsze decyzje, zobowiązania, terminy wymagające natychmiastowej uwagi
+     - ⚡ **Ważne:** Istotne tematy, które wymagają monitorowania lub dalszych działań
+     - 📝 **Informacyjne:** Dodatkowe informacje, kontekst, tło rozmowy
+   - Każdy punkt powinien być konkretny i zwięzły
+   - Używaj **pogrubienia** dla kluczowych słów w każdym punkcie
+   - Skup się na elementach, na których należy się skupić po spotkaniu
+
+   ## Cytaty
+   - Sekcja z bezpośrednimi cytatami z transkrypcji, pogrupowanymi tematycznie
+   - Każdy temat powinien mieć nagłówek poziomu 3 (###)
+   - Cytaty formatuj jako blockquotes (`>`) z dodatkowym kontekstem
+   - Format dla każdego cytatu:
+     > "Dokładny cytat z transkrypcji"
+     > — *Kontekst: [krótki opis sytuacji, w której został wypowiedziany]*
+   - Wybierz 3-5 najważniejszych cytatów, które najlepiej ilustrują kluczowe wątki rozmowy
+   - Cytaty MUSZĄ być rzeczywistymi fragmentami z transkrypcji (nie parafrazami)
+   - Cytaty powinny potwierdzać i uzupełniać informacje z sekcji "Podsumowanie"
+   - Grupuj cytaty tematycznie - każdy temat w osobnej sekcji z nagłówkiem ###
+
+   ## Lista działań (To-do)
+   - 3-5 konkretnych zadań do wykonania po spotkaniu
+   - Każde zadanie w formie listy punktowanej (zaczynającej się od "-")
    - Zadania powinny zaczynać się od czasownika w trybie rozkazującym (np. "Przygotować...", "Skontaktować się...")
+   - Możesz używać checkboxów (`- [ ]`) dla zadań wymagających wykonania
+
+STYLOWANIE MARKDOWN:
+- Wykorzystuj pełne możliwości markdown: **pogrubienie**, *kursywa*, `kod inline`, blockquotes (`>`), listy numerowane, tabele (gdy odpowiednie)
+- Używaj separatorów (`---`) między większymi sekcjami jeśli potrzebne
+- Formatuj cytaty jako blockquotes dla lepszej czytelności
+- Używaj emoji (⚠️ ⚡ 📝) konsekwentnie dla priorytetów w sekcji Kluczowe punkty
 
 WAŻNE:
 - Podsumowanie powinno być zwięzłe i skupiać się na najważniejszych wnioskach
+- Cytaty MUSZĄ być rzeczywistymi fragmentami z transkrypcji (nie parafrazami)
+- Cytaty grupuj tematycznie - każdy temat w osobnej sekcji z nagłówkiem ###
 - Lista zadań powinna zawierać tylko konkretne, wykonalne akcje
 - Używaj wyłącznie języka polskiego
-- Formatuj odpowiedź jako markdown z nagłówkami i listami
+- Formatuj odpowiedź jako markdown z pełnym wykorzystaniem możliwości stylowania
 
 Odpowiedz WYŁĄCZNIE w formacie:
 TITLE: [tytuł]
-SUMMARY: [podsumowanie w formacie markdown z sekcjami ## Podsumowanie i ## Lista działań (To-do)]
+SUMMARY: [podsumowanie w formacie markdown z sekcjami: ## Podsumowanie, ## Kluczowe punkty, ## Cytaty, ## Lista działań (To-do)]
 
 Transkrypcja:
 {transcript}"""
@@ -209,6 +253,21 @@ Transkrypcja:
 
 Brak podsumowania.
 
+## Kluczowe punkty
+
+⚠️ **Krytyczne:**
+- Przejrzeć transkrypcję ręcznie
+
+⚡ **Ważne:**
+- Wyciągnąć kluczowe wnioski ze spotkania
+
+📝 **Informacyjne:**
+- Sprawdzić pełną transkrypcję poniżej
+
+## Cytaty
+
+*Brak cytatów - wymagana ręczna analiza transkrypcji*
+
 ## Lista działań (To-do)
 
 - Przejrzeć transkrypcję ręcznie"""
@@ -234,6 +293,21 @@ Brak podsumowania.
 
 {summary_text}
 
+## Kluczowe punkty
+
+⚠️ **Krytyczne:**
+- Przejrzeć transkrypcję i wyciągnąć kluczowe wnioski
+
+⚡ **Ważne:**
+- Zidentyfikować następne kroki do wykonania
+
+📝 **Informacyjne:**
+- Przeanalizować pełną transkrypcję poniżej
+
+## Cytaty
+
+*Brak cytatów - wymagana ręczna analiza transkrypcji*
+
 ## Lista działań (To-do)
 
 - Przejrzeć transkrypcję i wyciągnąć kluczowe wnioski
@@ -243,6 +317,21 @@ Brak podsumowania.
             summary = """## Podsumowanie
 
 Nie udało się wygenerować podsumowania.
+
+## Kluczowe punkty
+
+⚠️ **Krytyczne:**
+- Przejrzeć transkrypcję ręcznie
+
+⚡ **Ważne:**
+- Wyciągnąć kluczowe wnioski ze spotkania
+
+📝 **Informacyjne:**
+- Sprawdzić pełną transkrypcję poniżej
+
+## Cytaty
+
+*Brak cytatów - wymagana ręczna analiza transkrypcji*
 
 ## Lista działań (To-do)
 

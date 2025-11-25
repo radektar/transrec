@@ -208,16 +208,12 @@ class MarkdownGenerator:
         if len(safe_title) > max_title_length:
             safe_title = safe_title[:max_title_length - 3] + "..."
         
-        # Format date
-        date_str = recording_date.strftime("%Y-%m-%d")
+        # Format date (YY-MM-DD for readability)
+        date_str = recording_date.strftime("%y-%m-%d")
         
-        # Combine: YYYY-MM-DD_Title.md
-        if safe_title:
-            filename = f"{date_str}_{safe_title}.md"
-        else:
-            filename = f"{date_str}_Nagranie.md"
+        title_part = safe_title if safe_title else "Nagranie"
         
-        return filename
+        return f"{date_str} - {title_part}.md"
     
     def _sanitize_filename(self, title: str) -> str:
         """Sanitize title for use in filename.
@@ -245,17 +241,17 @@ class MarkdownGenerator:
             normalized = normalized.replace(polish_char, ascii_char)
         
         # Remove invalid filename characters
-        # Keep: letters, numbers, spaces, hyphens, underscores
+        # Keep: letters, numbers, spaces, hyphens
         normalized = re.sub(r'[^\w\s\-]', '', normalized)
         
-        # Replace spaces with underscores
-        normalized = re.sub(r'\s+', '_', normalized)
+        # Replace underscores with spaces (prefer readable titles)
+        normalized = normalized.replace('_', ' ')
         
-        # Remove multiple underscores
-        normalized = re.sub(r'_+', '_', normalized)
+        # Collapse multiple spaces
+        normalized = re.sub(r'\s+', ' ', normalized)
         
-        # Remove leading/trailing underscores
-        normalized = normalized.strip('_')
+        # Remove leading/trailing spaces and hyphens
+        normalized = normalized.strip(' -')
         
         return normalized
 

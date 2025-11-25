@@ -103,14 +103,14 @@ class TestSanitizeFilename:
     def test_sanitize_basic(self, generator):
         """Test basic filename sanitization."""
         result = generator._sanitize_filename("Test Title")
-        assert result == "Test_Title"
+        assert result == "Test Title"
     
     def test_sanitize_polish_chars(self, generator):
         """Test Polish character normalization."""
         result = generator._sanitize_filename("Rozmowa o projekcie")
         assert "ą" not in result
         assert "ć" not in result
-        assert "_" in result
+        assert "_" not in result
     
     def test_sanitize_special_chars(self, generator):
         """Test removal of special characters."""
@@ -123,14 +123,13 @@ class TestSanitizeFilename:
     def test_sanitize_multiple_spaces(self, generator):
         """Test handling of multiple spaces."""
         result = generator._sanitize_filename("Test    Title")
-        assert "__" not in result  # Should not have double underscores
-        assert result.count("_") <= 1
+        assert "  " not in result
+        assert result == "Test Title"
     
     def test_sanitize_leading_trailing_underscores(self, generator):
         """Test removal of leading/trailing underscores."""
         result = generator._sanitize_filename("_Test_Title_")
-        assert not result.startswith("_")
-        assert not result.endswith("_")
+        assert result == "Test Title"
 
 
 class TestGenerateFilename:
@@ -143,9 +142,7 @@ class TestGenerateFilename:
         
         filename = generator._generate_filename(title, date)
         
-        assert filename.startswith("2025-11-19_")
-        assert filename.endswith(".md")
-        assert "Test_Title" in filename
+        assert filename == "25-11-19 - Test Title.md"
     
     def test_generate_filename_long_title(self, generator):
         """Test filename generation with long title."""
@@ -164,7 +161,7 @@ class TestGenerateFilename:
         
         filename = generator._generate_filename("", date)
         
-        assert filename == "2025-11-19_Nagranie.md"
+        assert filename == "25-11-19 - Nagranie.md"
 
 
 class TestCreateMarkdownDocument:

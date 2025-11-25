@@ -353,6 +353,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - E2E tests confirm staging works correctly with real recorder
 - Verified files remain on recorder after processing
 
+## [1.6.1] - 2025-11-25
+
+### Added
+- Rozszerzony prompt Claude oraz fallback summary, teraz zawierający sekcję **Kluczowe punkty** z emoji priorytetów, blok *Cytaty* z tematycznymi nagłówkami i bogatsze formatowanie markdown.
+- Nowe testy `tests/test_summarizer.py`, które weryfikują obecność nowych sekcji, emoji oraz cytatów w odpowiedziach LLM.
+
+### Changed
+- Nazwy plików markdown korzystają z czytelnego formatu `YY-MM-DD - Tytuł.md`, zachowują spacje i usuwają zbędne znaki, by łatwiej było je przeglądać w Finderze/Obsidianie.
+- `_sanitize_filename()` zachowuje spacje i usuwa tylko niedozwolone znaki, co poprawia czytelność tytułów.
+
+### Fixed
+- Udostępniono klienta `Anthropic` na poziomie modułu `src/summarizer`, dzięki czemu testy mogą go patchować bez błędów `AttributeError`.
+
 ## [Unreleased - Future]
 
 ### Planned Features
