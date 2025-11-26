@@ -124,3 +124,4 @@ I podłącz recorder - transkrypcje pojawią się w Obsidian! 🎉
 
 
 
+

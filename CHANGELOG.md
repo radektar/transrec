@@ -356,167 +356,182 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.6.1] - 2025-11-25
 
 ### Added
-- Rozszerzony prompt Claude oraz fallback summary, teraz zawierający sekcję **Kluczowe punkty** z emoji priorytetów, blok *Cytaty* z tematycznymi nagłówkami i bogatsze formatowanie markdown.
-- Nowe testy `tests/test_summarizer.py`, które weryfikują obecność nowych sekcji, emoji oraz cytatów w odpowiedziach LLM.
+- Enhanced Claude prompt and fallback summary, now including **Key Points** section with priority emojis, *Quotes* block with thematic headings, and richer markdown formatting.
+- New tests in `tests/test_summarizer.py` that verify the presence of new sections, emojis, and quotes in LLM responses.
 
 ### Changed
-- Nazwy plików markdown korzystają z czytelnego formatu `YY-MM-DD - Tytuł.md`, zachowują spacje i usuwają zbędne znaki, by łatwiej było je przeglądać w Finderze/Obsidianie.
-- `_sanitize_filename()` zachowuje spacje i usuwa tylko niedozwolone znaki, co poprawia czytelność tytułów.
+- Markdown filenames now use readable format `YY-MM-DD - Title.md`, preserve spaces and remove only forbidden characters for easier browsing in Finder/Obsidian.
+- `_sanitize_filename()` preserves spaces and removes only disallowed characters, improving title readability.
 
 ### Fixed
-- Udostępniono klienta `Anthropic` na poziomie modułu `src/summarizer`, dzięki czemu testy mogą go patchować bez błędów `AttributeError`.
+- Made `Anthropic` client available at module level in `src/summarizer`, allowing tests to patch it without `AttributeError`.
 
 ## [1.7.0] - 2025-11-25
 
 ### Added
-- **Multi-computer support**: Konfiguracja `OLYMPUS_TRANSCRIBE_DIR` przez zmienną środowiskową
-  - Pozwala na instalację aplikacji na wielu komputerach z różnymi nazwami użytkowników
-  - Wszystkie instancje mogą wskazywać na ten sam synchronizowany katalog vaulta Obsidian
-  - Zapobiega duplikacji transkrypcji między komputerami
-- **Walidacja katalogu transkrypcji przy starcie**:
-  - Logowanie źródła `TRANSCRIBE_DIR` (ze zmiennej środowiskowej lub domyślnej ścieżki)
-  - Automatyczne tworzenie katalogu jeśli nie istnieje
-  - Ostrzeżenie jeśli katalog nie wygląda na synchronizowany (iCloud/Obsidian)
-  - Szczegółowe komunikaty błędów z instrukcjami konfiguracji
-- Dokumentacja konfiguracji multi-computer w `DEVELOPMENT.md` i `INSTALLATION-GUIDE`
+- **Multi-computer support**: Configuration of `OLYMPUS_TRANSCRIBE_DIR` via environment variable
+  - Allows application installation on multiple computers with different usernames
+  - All instances can point to the same synchronized Obsidian vault directory
+  - Prevents transcription duplication between computers
+- **Transcription directory validation at startup**:
+  - Logging of `TRANSCRIBE_DIR` source (from environment variable or default path)
+  - Automatic directory creation if it doesn't exist
+  - Warning if directory doesn't appear to be synchronized (iCloud/Obsidian)
+  - Detailed error messages with configuration instructions
+- Documentation for multi-computer configuration in `DEVELOPMENT.md` and `INSTALLATION-GUIDE`
 
 ### Changed
-- `TRANSCRIBE_DIR` w `config.py`:
-  - Najpierw sprawdza zmienną środowiskową `OLYMPUS_TRANSCRIBE_DIR`
-  - Jeśli nie ustawiona, używa domyślnej ścieżki opartej na `Path.home()` zamiast twardego `/Users/radoslawtaraszka/...`
-  - Ścieżka zawsze rozwiązywana do absolutnej (`.resolve()`)
-- Ulepszone logowanie przy starcie aplikacji (`app_core.py`):
-  - Wyświetla źródło konfiguracji `TRANSCRIBE_DIR`
-  - Pokazuje czy katalog istnieje i czy został utworzony
-  - Ostrzega o potencjalnych problemach z synchronizacją
+- `TRANSCRIBE_DIR` in `config.py`:
+  - First checks environment variable `OLYMPUS_TRANSCRIBE_DIR`
+  - If not set, uses default path based on `Path.home()` instead of hardcoded `/Users/radoslawtaraszka/...`
+  - Path always resolved to absolute (`.resolve()`)
+- Enhanced logging at application startup (`app_core.py`):
+  - Displays source of `TRANSCRIBE_DIR` configuration
+  - Shows whether directory exists and whether it was created
+  - Warns about potential synchronization issues
 
 ### Fixed
-- Problem z instalacją na wielu komputerach z różnymi nazwami użytkowników
-- Twardo zakodowana ścieżka użytkownika w konfiguracji
+- Issue with installation on multiple computers with different usernames
+- Hardcoded user path in configuration
 
 ### Technical Details
-- Mechanizm sprawdzania `source: <audio_file>` w YAML frontmatter zapobiega duplikatom między komputerami
-- Wszystkie instancje muszą wskazywać na ten sam katalog vaulta dla pełnej ochrony przed duplikatami
-- Kompatybilność wsteczna: jeśli `OLYMPUS_TRANSCRIBE_DIR` nie jest ustawiona, używa standardowej lokalizacji
+- Mechanism checking `source: <audio_file>` in YAML frontmatter prevents duplicates between computers
+- All instances must point to the same vault directory for full duplicate protection
+- Backward compatibility: if `OLYMPUS_TRANSCRIBE_DIR` is not set, uses standard location
 
 ### Documentation
-- Dodano sekcję "Multi-Computer Setup: TRANSCRIBE_DIR Configuration" w `DEVELOPMENT.md`
-- Rozszerzono sekcję "Configuration" w `INSTALLATION-GUIDE` o instrukcje dla wielu komputerów
-- Przykłady konfiguracji przez `.env` i `~/.zshrc`
+- Added section "Multi-Computer Setup: TRANSCRIBE_DIR Configuration" in `DEVELOPMENT.md`
+- Extended "Configuration" section in `INSTALLATION-GUIDE` with multi-computer instructions
+- Configuration examples via `.env` and `~/.zshrc`
 
 ## [1.7.1] - 2025-11-25
 
 ### Added
-- File-based process lock to ensure tylko jedna instancja transkrybera działa jednocześnie
-- Dokumentacja troubleshootingu opisująca obsługę błędów Metal oraz ręczne usuwanie lock file
+- File-based process lock to ensure only one transcriber instance runs at a time
+- Troubleshooting documentation describing Metal error handling and manual lock file removal
 
 ### Fixed
-- whisper.cpp fallback wykrywa teraz komunikaty `ggml_metal`/`MTLLibrar` i automatycznie przełącza się na CPU,
-  co eliminuje serię błędów `Return code -6`
-- Zabezpieczono workflow przed ponownym kopiowaniem/przetwarzaniem, gdy druga instancja startuje równolegle
+- whisper.cpp fallback now detects `ggml_metal`/`MTLLibrar` messages and automatically switches to CPU,
+  eliminating series of `Return code -6` errors
+- Protected workflow against re-copying/re-processing when second instance starts in parallel
 
 ## [1.8.0] - 2025-11-25
 
 ### Added
-- **Automatyczne tagowanie transkrypcji przez LLM**:
-  - Claude API generuje do 6 tagów Obsidian dla każdego nowego nagrania
-  - Tagi oparte na transkrypcji, podsumowaniu i istniejącym słowniku tagów
-  - Inteligentna deduplikacja i normalizacja tagów (polskie znaki → ASCII)
-  - Tagi dodawane do YAML frontmatter w formacie `tags: [tag1, tag2, ...]`
-- **Indeksowanie tagów z całego vaulta** (`src/tag_index.py`):
-  - `TagIndex` skanuje wszystkie pliki `.md` w `TRANSCRIBE_DIR`
-  - Normalizuje tagi (usuwa polskie znaki, spacje → myślniki)
-  - Utrzymuje mapowanie `normalized → original` dla zachowania spójności
-  - Metody: `build_index()`, `existing_tags()`, `normalize_tag()`, `sanitize_tag_value()`
-- **Moduł taggera** (`src/tagger.py`):
-  - Abstrakcyjna klasa `BaseTagger` dla różnych dostawców LLM
-  - Implementacja `ClaudeTagger` z obsługą API Anthropic
-  - Prompt construction z obsługą existing_tags (do 150 tagów w promptcie)
-  - Timeout 10s, graceful fallback przy błędzie API
-  - Funkcja `get_tagger()` dla łatwego tworzenia instancji
-- **Skrypt retagowania istniejących transkrypcji** (`scripts/retag_existing_transcripts.py`):
-  - Masowe dodanie tagów do plików `.md` bez tagów lub z samym `[transcription]`
-  - Parsowanie YAML frontmatter, ekstrakcja transkryptu i podsumowania
-  - Dry-run mode (preview zmian bez zapisu)
-  - Szczegółowe logowanie zmian i błędów
-  - Wykorzystuje `TagIndex` i `ClaudeTagger`
-- **Konfiguracja tagowania** w `src/config.py`:
+- **Automatic LLM-based transcription tagging**:
+  - Claude API generates up to 6 Obsidian tags for each new recording
+  - Tags based on transcription, summary, and existing tag dictionary
+  - Intelligent deduplication and tag normalization (Polish characters → ASCII)
+  - Tags added to YAML frontmatter in format `tags: [tag1, tag2, ...]`
+- **Tag indexing across entire vault** (`src/tag_index.py`):
+  - `TagIndex` scans all `.md` files in `TRANSCRIBE_DIR`
+  - Normalizes tags (removes Polish characters, spaces → hyphens)
+  - Maintains `normalized → original` mapping to preserve consistency
+  - Methods: `build_index()`, `existing_tags()`, `normalize_tag()`, `sanitize_tag_value()`
+- **Tagger module** (`src/tagger.py`):
+  - Abstract `BaseTagger` class for different LLM providers
+  - `ClaudeTagger` implementation with Anthropic API support
+  - Prompt construction with existing_tags support (up to 150 tags in prompt)
+  - 10s timeout, graceful fallback on API error
+  - `get_tagger()` function for easy instance creation
+- **Retagging script for existing transcriptions** (`scripts/retag_existing_transcripts.py`):
+  - Bulk tag addition to `.md` files without tags or with only `[transcription]`
+  - YAML frontmatter parsing, transcript and summary extraction
+  - Dry-run mode (preview changes without saving)
+  - Detailed logging of changes and errors
+  - Uses `TagIndex` and `ClaudeTagger`
+- **Tagging configuration** in `src/config.py`:
   - `ENABLE_LLM_TAGGING` (bool, default: True)
   - `MAX_TAGS_PER_NOTE` (int, default: 6)
   - `MAX_EXISTING_TAGS_IN_PROMPT` (int, default: 150)
   - `MAX_TAGGER_SUMMARY_CHARS` (int, default: 3000)
   - `MAX_TAGGER_TRANSCRIPT_CHARS` (int, default: 1500)
-- **Rozszerzona dokumentacja** w `QUICKSTART.md`:
-  - Sekcja "LLM Tagging" z instrukcją konfiguracji
-  - Użycie skryptu retagowania
-  - Troubleshooting tagowania
+- **Extended documentation** in `QUICKSTART.md`:
+  - "LLM Tagging" section with configuration instructions
+  - Retagging script usage
+  - Tagging troubleshooting
 
 ### Changed
 - **Transcriber workflow** (`src/transcriber.py`):
-  - Po wygenerowaniu podsumowania następuje automatyczne tagowanie (jeśli włączone)
-  - `TagIndex` budowany przy starcie transkrybera
-  - Tagi przekazywane do `markdown_generator.create_markdown()`
+  - After summary generation, automatic tagging follows (if enabled)
+  - `TagIndex` built at transcriber startup
+  - Tags passed to `markdown_generator.create_markdown()`
   - Log: "🏷️  Generated N tags: [tag1, tag2, ...]"
 - **MarkdownGenerator** (`src/markdown_generator.py`):
-  - Metoda `create_markdown()` przyjmuje opcjonalny parametr `tags: Optional[List[str]]`
-  - Default `tags=["transcription"]` jeśli nie podano
-  - Template zmieniony: `tags: [{tags}]` zamiast `tags: [transcription]`
-  - Tagi renderowane jako `tag1, tag2, tag3` w YAML frontmatter
-- **Ulepszona detekcja błędów Metal/Core ML** (`src/transcriber.py`):
-  - Nowa metoda `_should_retry_without_coreml()` dla precyzyjnej detekcji
-  - Wykrywanie komunikatów: `ggml_metal`, `MTLLibrar`, `Core ML`, `tensor API disabled`
-  - Automatyczny retry z flagą `use_coreml=False` przy wykryciu Metal error
-  - Lepsza separacja logiki retry vs. błąd fatalny
+  - Method `create_markdown()` accepts optional parameter `tags: Optional[List[str]]`
+  - Default `tags=["transcription"]` if not provided
+  - Template changed: `tags: [{tags}]` instead of `tags: [transcription]`
+  - Tags rendered as `tag1, tag2, tag3` in YAML frontmatter
+- **Enhanced Metal/Core ML error detection** (`src/transcriber.py`):
+  - New method `_should_retry_without_coreml()` for precise detection
+  - Detects messages: `ggml_metal`, `MTLLibrar`, `Core ML`, `tensor API disabled`
+  - Automatic retry with `use_coreml=False` flag when Metal error detected
+  - Better separation of retry logic vs. fatal error
 
 ### Fixed
-- **Deduplikacja tagów**: TagIndex zapobiega duplikatom z polskimi znakami (np. `organizacja` vs `organizacja`)
-- **Graceful fallback**: Jeśli `ENABLE_SUMMARIZATION=False`, automatycznie wyłącza `ENABLE_LLM_TAGGING`
-- **Empty tag handling**: `sanitize_tag_value()` zwraca pusty string zamiast błędu dla niepoprawnych tagów
+- **Tag deduplication**: TagIndex prevents duplicates with Polish characters (e.g., `organizacja` vs `organizacja`)
+- **Graceful fallback**: If `ENABLE_SUMMARIZATION=False`, automatically disables `ENABLE_LLM_TAGGING`
+- **Empty tag handling**: `sanitize_tag_value()` returns empty string instead of error for invalid tags
 
 ### Dependencies
-- Istniejąca zależność `anthropic>=0.8.0` wykorzystana dla tagowania (bez nowych pakietów)
+- Existing dependency `anthropic>=0.8.0` reused for tagging (no new packages)
 
 ### Technical Details
-- **Abstrakcja taggera**: `BaseTagger` umożliwia łatwą integrację innych dostawców (OpenAI, Ollama)
-- **Normalizacja tagów**: Polskie znaki (`ą`, `ć`, `ę`, ...) → ASCII (`a`, `c`, `e`, ...)
-- **Sanityzacja tagów**: Spacje → myślniki, usunięcie niedozwolonych znaków, lowercase
-- **Thread-safe tag indexing**: Index budowany raz przy starcie, używany wielokrotnie
-- **Graceful degradation**: Brak API key → tagowanie wyłączone, log warning, workflow kontynuowany
-- **Prompt engineering**: 
-  - Krótkie fragmenty (3000 chars summary, 1500 chars transcript)
-  - Existing tags w liście po przecinku
+- **Tagger abstraction**: `BaseTagger` enables easy integration of other providers (OpenAI, Ollama)
+- **Tag normalization**: Polish characters (`ą`, `ć`, `ę`, ...) → ASCII (`a`, `c`, `e`, ...)
+- **Tag sanitization**: Spaces → hyphens, removal of disallowed characters, lowercase
+- **Thread-safe tag indexing**: Index built once at startup, used multiple times
+- **Graceful degradation**: Missing API key → tagging disabled, log warning, workflow continues
+- **Prompt engineering**:
+  - Short fragments (3000 chars summary, 1500 chars transcript)
+  - Existing tags in comma-separated list
   - JSON output `{"tags": ["tag1", "tag2", ...]}`
-- **Retry logic**: Błąd API → return empty list, nie przerywa transkrypcji
+- **Retry logic**: API error → return empty list, doesn't interrupt transcription
 
 ### Testing
-- Nowe testy `tests/test_tagger.py`:
-  - `test_tagger_normalize_tag()` - normalizacja polskich znaków
-  - `test_tagger_sanitize_tag()` - sanityzacja do formatu Obsidian
-  - `test_tagger_generate_tags_mock()` - mockowanie Claude API
-  - `test_tagger_api_error_graceful()` - obsługa błędów API
-- Nowe testy `tests/test_tag_index.py`:
-  - `test_tag_index_build()` - indeksowanie plików markdown
-  - `test_tag_index_existing_tags()` - ekstrakcja tagów z vaulta
-- Rozszerzone testy `tests/test_transcriber.py`:
-  - `test_transcriber_with_tagging()` - integracja tagowania w workflow
-  - `test_should_retry_without_coreml()` - detekcja błędów Metal
-- Rozszerzone testy `tests/test_markdown_generator.py`:
-  - `test_create_markdown_with_tags()` - custom tagi w YAML frontmatter
+- New tests in `tests/test_tagger.py`:
+  - `test_tagger_normalize_tag()` - Polish character normalization
+  - `test_tagger_sanitize_tag()` - sanitization to Obsidian format
+  - `test_tagger_generate_tags_mock()` - Claude API mocking
+  - `test_tagger_api_error_graceful()` - API error handling
+- New tests in `tests/test_tag_index.py`:
+  - `test_tag_index_build()` - markdown file indexing
+  - `test_tag_index_existing_tags()` - tag extraction from vault
+- Extended tests in `tests/test_transcriber.py`:
+  - `test_transcriber_with_tagging()` - tagging integration in workflow
+  - `test_should_retry_without_coreml()` - Metal error detection
+- Extended tests in `tests/test_markdown_generator.py`:
+  - `test_create_markdown_with_tags()` - custom tags in YAML frontmatter
 
 ### Known Limitations
-- Tagowanie wymaga `ENABLE_SUMMARIZATION=True` i ważnego API key Anthropic
-- Skrypt `retag_existing_transcripts.py` nie obsługuje plików spoza `TRANSCRIBE_DIR`
-- Maksymalnie 150 existing tags w promptcie (ograniczenie context length)
-- Timeout API 10s może być za krótki dla bardzo długich transkrypcji
+- Tagging requires `ENABLE_SUMMARIZATION=True` and valid Anthropic API key
+- Script `retag_existing_transcripts.py` doesn't support files outside `TRANSCRIBE_DIR`
+- Maximum 150 existing tags in prompt (context length limitation)
+- 10s API timeout may be too short for very long transcriptions
 
 ## [1.8.1] - 2025-11-25
 
 ### Fixed
-- Ustabilizowano fallback whisper.cpp z Metal/Core ML na tryb CPU przez jawne wyłączenie backendów (`WHISPER_COREML=0`, `GGML_METAL_DISABLE=1`), co eliminuje powtarzające się błędy transkrypcji na starszych urządzeniach.
-- Wykrywane i automatycznie czyszczone są przeterminowane pliki lock (`transcriber.lock`), aby zapobiec trwałemu blokowaniu `process_recorder()` po awarii poprzedniego procesu.
+- Stabilized whisper.cpp fallback from Metal/Core ML to CPU mode by explicitly disabling backends (`WHISPER_COREML=0`, `GGML_METAL_DISABLE=1`), eliminating recurring transcription errors on older devices.
+- Stale lock files (`transcriber.lock`) are now detected and automatically cleaned to prevent permanent `process_recorder()` blocking after previous process crashes.
 
 ### Testing
-- Dodano testy jednostkowe zabezpieczające konfigurację fallbacku CPU i obsługę starych plików lock w `Transcriber`.
+- Added unit tests securing CPU fallback configuration and stale lock file handling in `Transcriber`.
+
+## [1.8.2] - 2025-11-26
+
+### Changed
+- Improved code quality compliance with PEP 8 standards:
+  - Added trailing newlines to all source files (`.py`, `.toml`, `.flake8`, `.sh`)
+  - Ensures consistency with Black formatter and flake8 linter requirements
+- CHANGELOG documentation standardized to English for better accessibility
+  - Translated Polish sections (1.6.1, 1.7.0, 1.7.1) to English
+  - Maintains consistent language throughout project documentation
+
+### Technical Details
+- All Python source files now end with proper newline character
+- Configuration files (`.flake8`, `pyproject.toml`) comply with tool requirements
+- Shell scripts follow Unix/POSIX standards for text files
 
 ## [Unreleased - Future]
 
@@ -548,8 +563,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.8.2** (2025-11-26) - Code quality improvements, PEP 8 compliance, CHANGELOG standardization
+- **1.8.1** (2025-11-25) - Stabilized whisper.cpp CPU fallback, stale lock file detection
 - **1.8.0** (2025-11-25) - LLM-based automatic tagging, tag indexing, retag script
-- **1.7.1** (2025-11-25) - Process lock + rozszerzony fallback Metal → CPU
+- **1.7.1** (2025-11-25) - Process lock + extended Metal → CPU fallback
 - **1.7.0** (2025-11-25) - Multi-computer support with OLYMPUS_TRANSCRIBE_DIR configuration
 - **1.6.1** (2025-11-25) - Enhanced markdown formatting and Claude prompts
 - **1.6.0** (2025-11-25) - Local staging workflow for robust transcription, improved batch failure handling
