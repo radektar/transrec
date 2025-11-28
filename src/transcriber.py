@@ -300,9 +300,17 @@ class Transcriber:
                     logger.warning(f"Could not access file {item}: {e}")
                     continue
         
-        except Exception as e:
-            logger.error(f"Error scanning for audio files: {e}")
+        except OSError as e:
+            logger.error(f"OSError scanning recorder (may have unmounted): {e}", exc_info=True)
             return []
+        except PermissionError as e:
+            logger.error(f"PermissionError scanning recorder: {e}", exc_info=True)
+            return []
+        except Exception as e:
+            logger.error(f"Error scanning for audio files: {e}", exc_info=True)
+            return []
+        
+        logger.debug(f"Scan complete: found {len(new_files)} new audio file(s)")
         
         # Sort by modification time (oldest first)
         new_files.sort(key=lambda x: x.stat().st_mtime)

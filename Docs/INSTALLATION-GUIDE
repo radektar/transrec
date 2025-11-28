@@ -772,9 +772,69 @@ W Terminal z aplikacją: **Ctrl + C**
 
 ---
 
-## CZĘŚĆ 7: Deployment na LaunchAgent (2 minuty)
+## CZĘŚĆ 7: Konfiguracja Full Disk Access (Wymagane - 2 minuty)
 
-### 7.1 Utwórz `setup.sh`
+### 7.1 Problem z dostępem do zewnętrznych dysków
+
+Daemon uruchomiony przez `launchd` lub jako aplikacja `.app` **wymaga Full Disk Access** aby móc odczytywać pliki z zewnętrznych dysków (np. rekorder Olympus `/Volumes/LS-P1`).
+
+Bez tego uprawnienia, aplikacja nie będzie mogła wykrywać plików na rekorderze mimo że jest podłączony.
+
+### 7.2 Konfiguracja Full Disk Access
+
+1. **Otwórz System Settings**
+   - System Settings → Privacy & Security → **Full Disk Access**
+   - Lub użyj skrótu: `open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"`
+
+2. **Dodaj aplikację**
+   - Kliknij przycisk **"+"** (plus) na dole listy
+   - W oknie wyboru pliku naciśnij **Cmd + Shift + G** (Go to Folder)
+   - Wklej: `~/Applications`
+   - Wybierz **Transrec.app**
+   - Kliknij **Open**
+
+3. **Włącz dostęp**
+   - Upewnij się, że checkbox obok **Transrec.app** jest **zaznaczony**
+
+4. **Zrestartuj aplikację**
+   ```bash
+   pkill -f "Transrec\|python.*src.main"
+   open ~/Applications/Transrec.app
+   ```
+
+📖 **Szczegółowa instrukcja:** Zobacz [`Docs/FULL_DISK_ACCESS_SETUP.md`](Docs/FULL_DISK_ACCESS_SETUP.md)
+
+---
+
+## CZĘŚĆ 8: Deployment jako aplikacja .app (Zalecane - 3 minuty)
+
+### 8.1 Aplikacja .app została już utworzona
+
+Aplikacja `Transrec.app` znajduje się w `~/Applications/` i jest gotowa do użycia.
+
+### 8.2 Konfiguracja automatycznego uruchamiania
+
+**Opcja A: Login Items (Zalecane)**
+
+1. System Settings → General → **Login Items**
+2. Kliknij **"+"** i dodaj `Transrec.app`
+3. Upewnij się, że aplikacja jest zaznaczona
+
+**Opcja B: LaunchAgent**
+
+Zobacz sekcję 9 poniżej.
+
+### 8.3 Uruchomienie ręczne
+
+```bash
+open ~/Applications/Transrec.app
+```
+
+---
+
+## CZĘŚĆ 9: Deployment na LaunchAgent (Alternatywa - 2 minuty)
+
+### 9.1 Utwórz `setup.sh`
 
 **New File** → `setup.sh`
 
@@ -800,8 +860,7 @@ cat > ~/Library/LaunchAgents/com.user.olympus-transcriber.plist << 'EOF'
     
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
-        <string>SCRIPT_PATH</string>
+        <string>~/Applications/Transrec.app/Contents/MacOS/Transrec</string>
     </array>
     
     <key>RunAtLoad</key>
@@ -819,9 +878,6 @@ cat > ~/Library/LaunchAgents/com.user.olympus-transcriber.plist << 'EOF'
 </plist>
 EOF
 
-# Replace SCRIPT_PATH
-sed -i '' "s|SCRIPT_PATH|$(pwd)/src/main.py|g" ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
-
 # Load LaunchAgent
 launchctl load ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
 
@@ -831,14 +887,14 @@ echo "Service status:"
 launchctl list | grep olympus
 ```
 
-### 7.2 Uruchom Setup
+### 9.2 Uruchom Setup
 
 ```bash
 chmod +x setup.sh
 bash setup.sh
 ```
 
-### 7.3 Weryfikacja
+### 9.3 Weryfikacja
 
 ```bash
 # Check if running

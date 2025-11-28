@@ -126,22 +126,46 @@ Podłącz recorder - powinno pokazać:
 ✓ Transcription complete: recording.mp3
 ```
 
-### 6. Zainstaluj jako daemon
+### 6. Skonfiguruj Full Disk Access (Wymagane dla daemona)
 
-Zatrzymaj aplikację (Ctrl+C), następnie:
+**⚠️ WAŻNE:** Daemon uruchomiony przez `launchd` lub jako aplikacja `.app` wymaga **Full Disk Access** aby móc odczytywać pliki z zewnętrznych dysków (rekorder Olympus).
 
+**Szybka konfiguracja:**
+
+1. Otwórz System Settings → Privacy & Security → **Full Disk Access**
+2. Kliknij przycisk **"+"** (plus)
+3. Naciśnij **Cmd + Shift + G** (Go to Folder)
+4. Wklej: `~/Applications`
+5. Wybierz **Transrec.app**
+6. Kliknij **Open**
+7. Upewnij się, że checkbox obok aplikacji jest **zaznaczony**
+
+**Alternatywa:** Jeśli używasz ręcznego uruchomienia z Terminala, nie jest to wymagane (Terminal ma już pełny dostęp).
+
+📖 **Szczegółowa instrukcja:** Zobacz [`Docs/FULL_DISK_ACCESS_SETUP.md`](Docs/FULL_DISK_ACCESS_SETUP.md)
+
+### 7. Zainstaluj jako daemon
+
+**Opcja A: Użyj aplikacji .app (Zalecane)**
+
+Aplikacja `Transrec.app` została już utworzona w `~/Applications/`. 
+
+**Automatyczne uruchamianie przy logowaniu:**
+- System Settings → General → **Login Items**
+- Upewnij się, że `Transrec.app` jest na liście
+
+**Lub użyj LaunchAgent:**
 ```bash
 make setup-daemon
 ```
 
-lub:
+**Opcja B: Ręczne uruchomienie**
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+open ~/Applications/Transrec.app
 ```
 
-**Gotowe!** Aplikacja działa w tle.
+**Gotowe!** Aplikacja działa w tle i automatycznie uruchomi się przy następnym logowaniu.
 
 ---
 
