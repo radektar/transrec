@@ -80,6 +80,109 @@ def test_file_monitor_stop_no_observer(mock_callback):
     monitor.stop()
 
 
+@patch('src.file_monitor.FSEVENTS_AVAILABLE', True)
+@patch('src.file_monitor.Observer')
+@patch('src.file_monitor.Stream')
+def test_file_monitor_ignores_system_directories(mock_stream, mock_observer, mock_callback):
+    """Test that system directories like .Spotlight-V100 are ignored."""
+    from src.file_monitor import FileMonitor
+    import time
+    
+    monitor = FileMonitor(mock_callback)
+    monitor._last_trigger_time = 0.0  # Reset debounce timer
+    
+    mock_observer_instance = MagicMock()
+    mock_observer.return_value = mock_observer_instance
+    
+    # Capture the on_change callback
+    on_change_callback = None
+    def capture_stream(callback, path, **kwargs):
+        nonlocal on_change_callback
+        on_change_callback = callback
+        return MagicMock()
+    
+    mock_stream.side_effect = capture_stream
+    
+    monitor.start()
+    
+    # Simulate FSEvents callback with system directory path
+    if on_change_callback:
+        on_change_callback("/Volumes/LS-P1/.Spotlight-V100/Store-V2", 0)
+        time.sleep(0.1)  # Small delay to ensure callback processing
+    
+    # Callback should not have been called
+    mock_callback.assert_not_called()
+
+
+@patch('src.file_monitor.FSEVENTS_AVAILABLE', True)
+@patch('src.file_monitor.Observer')
+@patch('src.file_monitor.Stream')
+@patch('src.file_monitor.time.sleep')
+def test_file_monitor_triggers_on_valid_path(mock_sleep, mock_stream, mock_observer, mock_callback):
+    """Test that valid recorder paths trigger the callback."""
+    from src.file_monitor import FileMonitor
+    import time
+    
+    monitor = FileMonitor(mock_callback)
+    monitor._last_trigger_time = 0.0  # Reset debounce timer
+    
+    mock_observer_instance = MagicMock()
+    mock_observer.return_value = mock_observer_instance
+    
+    # Capture the on_change callback
+    on_change_callback = None
+    def capture_stream(callback, path, **kwargs):
+        nonlocal on_change_callback
+        on_change_callback = callback
+        return MagicMock()
+    
+    mock_stream.side_effect = capture_stream
+    
+    monitor.start()
+    
+    # Simulate FSEvents callback with valid audio file path
+    if on_change_callback:
+        on_change_callback("/Volumes/LS-P1/Folder/audio.mp3", 0)
+        time.sleep(0.1)  # Small delay to ensure callback processing
+    
+    # Callback should have been called
+    mock_callback.assert_called_once()
+
+
+@patch('src.file_monitor.FSEVENTS_AVAILABLE', True)
+@patch('src.file_monitor.Observer')
+@patch('src.file_monitor.Stream')
+def test_file_monitor_ignores_non_recorder_paths(mock_stream, mock_observer, mock_callback):
+    """Test that paths not under recorder volumes are ignored."""
+    from src.file_monitor import FileMonitor
+    import time
+    
+    monitor = FileMonitor(mock_callback)
+    monitor._last_trigger_time = 0.0  # Reset debounce timer
+    
+    mock_observer_instance = MagicMock()
+    mock_observer.return_value = mock_observer_instance
+    
+    # Capture the on_change callback
+    on_change_callback = None
+    def capture_stream(callback, path, **kwargs):
+        nonlocal on_change_callback
+        on_change_callback = callback
+        return MagicMock()
+    
+    mock_stream.side_effect = capture_stream
+    
+    monitor.start()
+    
+    # Simulate FSEvents callback with path not under recorder
+    if on_change_callback:
+        on_change_callback("/Volumes/OtherDisk/file.txt", 0)
+        time.sleep(0.1)  # Small delay to ensure callback processing
+    
+    # Callback should not have been called
+    mock_callback.assert_not_called()
+
+
 
 
 

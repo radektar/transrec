@@ -712,3 +712,46 @@ def test_process_lock_keeps_recent_lock(tmp_path, monkeypatch):
     # Lock should not be acquired because existing one is still recent.
     assert acquired is False
 
+
+@patch('src.transcriber.send_notification')
+def test_process_recorder_no_notification_when_no_new_files(mock_notification, transcriber, mock_recorder_path):
+    """Test that no notification is sent when recorder has no new files."""
+    with patch.object(transcriber, 'find_recorder', return_value=mock_recorder_path):
+        with patch.object(transcriber, 'get_last_sync_time', 
+                         return_value=datetime.now() + timedelta(days=1)):  # Future date = no new files
+            with patch.object(transcriber, 'save_sync_time'):
+                transcriber.process_recorder()
+                
+                # Should not send any notifications when no new files found
+                mock_notification.assert_not_called()
+
+
+@patch('src.transcriber.send_notification')
+def test_process_recorder_sends_notification_when_new_files_found(
+    mock_notification, transcriber, mock_recorder_path, tmp_path, monkeypatch
+):
+    """Test that notifications are sent when new files are found."""
+    from src import config as config_module
+    
+    staging_dir = tmp_path / "staging"
+    staging_dir.mkdir()
+    monkeypatch.setattr(config_module.config, 'LOCAL_RECORDINGS_DIR', staging_dir)
+    
+    with patch.object(transcriber, 'find_recorder', return_value=mock_recorder_path):
+        with patch.object(transcriber, 'get_last_sync_time', 
+                         return_value=datetime.now() - timedelta(days=1)):  # Past date = new files
+            with patch.object(transcriber, 'transcribe_file', return_value=True):
+                with patch.object(transcriber, 'save_sync_time'):
+                    transcriber.process_recorder()
+                    
+                    # Should send notifications: recorder detected + new files found + completion
+                    assert mock_notification.call_count >= 2
+                    
+                    # Check that "Znaleziono X nowych nagrań" notification was sent
+                    call_args_list = [call[1] for call in mock_notification.call_args_list]
+                    subtitles = [args.get('subtitle', '') for args in call_args_list]
+                    assert any('nowych nagrań' in subtitle for subtitle in subtitles)
+                    
+                    # Check that completion notification was sent
+                    assert any('zakończona' in subtitle for subtitle in subtitles)
+

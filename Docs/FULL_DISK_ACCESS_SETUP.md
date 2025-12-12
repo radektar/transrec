@@ -62,3 +62,6 @@ venv/bin/python -m src.main
 
 Terminal dziedziczy uprawnienia użytkownika, więc nie wymaga dodatkowej konfiguracji TCC.
 
+
+
+

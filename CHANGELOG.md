@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned Features
 - See `BACKLOG.md` for upcoming features and improvements
 
+## [1.9.1] - 2025-11-29
+
+### Changed
+- **Reduced false recorder detection triggers**: FSEvents monitor now filters out macOS system directories (`.Spotlight-V100`, `.fseventsd`, `.Trashes`) to prevent unnecessary workflow invocations when Spotlight indexes the recorder volume
+- **Optimized notification behavior**: System notifications are now sent only when new audio files are found, eliminating spam when recorder is connected but has no new recordings
+
+### Fixed
+- Fixed repeated "Recorder detected" notifications triggered by macOS Spotlight indexing activity on the recorder volume
+- Reduced log noise from system directory changes that don't represent actual recorder activity
+
 ## [1.9.0] - 2025-11-28
 
 ### Added
@@ -604,6 +614,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.9.1** (2025-11-29) - Reduced false recorder detection triggers, optimized notification behavior
 - **1.9.0** (2025-11-28) - macOS application bundle, Full Disk Access setup, enhanced error handling, project backlog
 - **1.8.2** (2025-11-26) - Code quality improvements, PEP 8 compliance, CHANGELOG standardization
 - **1.8.1** (2025-11-25) - Stabilized whisper.cpp CPU fallback, stale lock file detection

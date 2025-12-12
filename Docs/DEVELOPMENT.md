@@ -449,6 +449,16 @@ FSEvents is much more efficient than polling:
 - Instant notification on changes
 - No battery impact
 
+### FSEvents System Directory Filtering
+
+The `FileMonitor` class filters out macOS system directories to prevent false triggers:
+- **Ignored directories**: `.Spotlight-V100`, `.fseventsd`, `.Trashes`
+- **Why**: macOS Spotlight automatically indexes external volumes, causing frequent FSEvents notifications that don't represent actual recorder activity
+- **Implementation**: The `on_change` callback checks if the first component of the relative path within the recorder volume is in the ignored list
+- **Result**: Only real file changes (new recordings, file modifications) trigger the transcription workflow
+
+This filtering significantly reduces log noise and prevents unnecessary `process_recorder()` invocations when the recorder is connected but idle.
+
 ### Transcription Optimization
 
 - Set appropriate timeout (default 30 min)

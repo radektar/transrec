@@ -66,19 +66,57 @@ class FileMonitor:
                 if current_time - self._last_trigger_time < self._debounce_seconds:
                     return
                 
-                # Check if path matches recorder names
-                if any(name in path for name in config.RECORDER_NAMES):
-                    logger.info(f"📢 Detected recorder activity: {path}")
-                    self._last_trigger_time = current_time
-                    
-                    # Wait for system to fully mount the volume
-                    time.sleep(config.MOUNT_MONITOR_DELAY)
-                    
-                    # Trigger callback
+                # Ignore internal macOS housekeeping on the recorder volume
+                IGNORED_DIRS = {".Spotlight-V100", ".fseventsd", ".Trashes"}
+                
+                try:
+                    path_obj = Path(path)
+                except (TypeError, ValueError):
+                    # Defensive: if path is not a string-like or invalid, just skip
+                    logger.debug(f"Invalid path in FSEvents: {path}")
+                    return
+                
+                # Detect which recorder root (if any) this path belongs to
+                recorder_root: Optional[Path] = None
+                for name in config.RECORDER_NAMES:
+                    candidate = Path("/Volumes") / name
                     try:
-                        self.callback()
-                    except Exception as e:
-                        logger.error(f"Error in callback: {e}", exc_info=True)
+                        path_obj.relative_to(candidate)
+                    except ValueError:
+                        continue
+                    else:
+                        recorder_root = candidate
+                        break
+                
+                if recorder_root is None:
+                    # Not under any known recorder root
+                    return
+                
+                # Compute relative path inside the recorder volume
+                try:
+                    relative = path_obj.relative_to(recorder_root)
+                except ValueError:
+                    # Should not happen given the check above, but be safe
+                    logger.debug(f"Could not compute relative path for: {path}")
+                    return
+                
+                # If the first component is a macOS system directory, ignore
+                parts = relative.parts
+                if parts and parts[0] in IGNORED_DIRS:
+                    logger.debug(f"Ignoring system directory change: {path}")
+                    return
+                
+                logger.info(f"📢 Detected recorder activity: {path}")
+                self._last_trigger_time = current_time
+                
+                # Wait for system to fully mount the volume or finish writes
+                time.sleep(config.MOUNT_MONITOR_DELAY)
+                
+                # Trigger callback
+                try:
+                    self.callback()
+                except Exception as e:
+                    logger.error(f"Error in callback: {e}", exc_info=True)
             
             # Create stream watching /Volumes
             stream = Stream(on_change, "/Volumes", file_events=False)

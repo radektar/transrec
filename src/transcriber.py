@@ -851,15 +851,6 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
             
             logger.info(f"✓ Recorder detected: {recorder}")
             
-            # Send notification only if this is first detection (not periodic check)
-            if not self.recorder_was_notified:
-                send_notification(
-                    title="Olympus Transcriber",
-                    subtitle="Recorder wykryty",
-                    message=f"Podłączono: {recorder.name}"
-                )
-                self.recorder_was_notified = True
-            
             self.recorder_monitoring = True
             
             # Get last sync time
@@ -870,8 +861,18 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
             new_files = self.find_audio_files(recorder, last_sync)
             logger.info(f"📁 Found {len(new_files)} new audio file(s)")
             
-            # Notify if new files found
+            # Send notification only if new files are found
+            # This prevents spam when recorder is connected but has no new recordings
             if new_files:
+                if not self.recorder_was_notified:
+                    send_notification(
+                        title="Olympus Transcriber",
+                        subtitle="Recorder wykryty",
+                        message=f"Podłączono: {recorder.name}"
+                    )
+                    self.recorder_was_notified = True
+                
+                # Notify about new files found
                 send_notification(
                     title="Olympus Transcriber",
                     subtitle=f"Znaleziono {len(new_files)} nowych nagrań",
