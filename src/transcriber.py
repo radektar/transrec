@@ -759,6 +759,115 @@ Brak podsumowania. Podsumowanie można wygenerować po skonfigurowaniu API Claud
 
         return None
     
+    def _remove_existing_transcription(self, audio_file: Path) -> Dict[str, List[str]]:
+        """Remove existing transcription files for given audio.
+        
+        Finds and removes markdown files with matching source field,
+        and removes TXT transcript file if it exists.
+        
+        Args:
+            audio_file: Path to audio file (staged copy)
+            
+        Returns:
+            Dict with 'removed_md' and 'removed_txt' lists containing
+            names of removed files
+        """
+        removed = {"removed_md": [], "removed_txt": []}
+        
+        # Find and remove markdown files with matching source
+        existing_md = self._find_existing_markdown_for_audio(audio_file)
+        if existing_md:
+            try:
+                existing_md.unlink()
+                removed["removed_md"].append(existing_md.name)
+                logger.info(f"🗑️  Removed existing markdown: {existing_md.name}")
+            except OSError as e:
+                logger.warning(f"Could not remove {existing_md}: {e}")
+        
+        # Find and remove TXT file
+        txt_path = config.TRANSCRIBE_DIR / f"{audio_file.stem}.txt"
+        if txt_path.exists():
+            try:
+                txt_path.unlink()
+                removed["removed_txt"].append(txt_path.name)
+                logger.info(f"🗑️  Removed existing TXT: {txt_path.name}")
+            except OSError as e:
+                logger.warning(f"Could not remove {txt_path}: {e}")
+        
+        return removed
+
+    def force_retranscribe(self, audio_file: Path) -> bool:
+        """Force re-transcription of a previously processed file.
+        
+        Removes existing transcription files (MD/TXT) and runs
+        transcription again. Uses ProcessLock to prevent conflicts
+        with automatic processing.
+        
+        Args:
+            audio_file: Path to audio file (should be in staging directory)
+            
+        Returns:
+            True if re-transcription succeeded, False otherwise
+        """
+        # #region agent log
+        import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "transcriber.py:799", "message": "force_retranscribe called", "data": {"audio_file": str(audio_file), "exists": audio_file.exists()}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + '\n')
+        # #endregion
+        if not audio_file.exists():
+            logger.error(f"Audio file not found: {audio_file}")
+            return False
+        
+        logger.info(f"🔄 Force re-transcription requested: {audio_file.name}")
+        
+        # Acquire process lock to prevent conflicts
+        lock = ProcessLock(config.PROCESS_LOCK_FILE)
+        if not lock.acquire():
+            # #region agent log
+            import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "transcriber.py:822", "message": "Could not acquire lock", "data": {}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + '\n')
+            # #endregion
+            logger.warning(
+                "Cannot acquire lock - another transcription in progress"
+            )
+            return False
+        
+        try:
+            # Remove existing transcription files
+            removed = self._remove_existing_transcription(audio_file)
+            logger.info(
+                f"Removed {len(removed['removed_md'])} MD, "
+                f"{len(removed['removed_txt'])} TXT files"
+            )
+            
+            # Update state to show we're working
+            # #region agent log
+            import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "transcriber.py:835", "message": "Updating state to TRANSCRIBING", "data": {"audio_file_name": audio_file.name, "state_updater_exists": self.state_updater is not None}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D"}) + '\n')
+            # #endregion
+            self._update_state(AppStatus.TRANSCRIBING, audio_file.name)
+            
+            # Run transcription
+            # #region agent log
+            import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "transcriber.py:838", "message": "Calling transcribe_file", "data": {"audio_file": str(audio_file)}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C,E"}) + '\n')
+            # #endregion
+            success = self.transcribe_file(audio_file)
+            # #region agent log
+            import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "transcriber.py:851", "message": "transcribe_file returned", "data": {"success": success}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C,E"}) + '\n')
+            # #endregion
+            
+            if success:
+                logger.info(f"✅ Re-transcription complete: {audio_file.name}")
+            else:
+                logger.error(f"❌ Re-transcription failed: {audio_file.name}")
+            
+            return success
+            
+        finally:
+            lock.release()
+            # Reset state if no more files in progress
+            if not self.transcription_in_progress:
+                # #region agent log
+                import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "transcriber.py:863", "message": "Resetting state to IDLE", "data": {}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "D,E"}) + '\n')
+                # #endregion
+                self._update_state(AppStatus.IDLE)
+    
     def transcribe_file(self, audio_file: Path) -> bool:
         """Transcribe a single audio file using whisper.cpp.
         

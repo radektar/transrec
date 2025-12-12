@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned Features
 - See `BACKLOG.md` for upcoming features and improvements
 
+## [1.10.0] - 2025-12-12
+
+### Added
+- **Retranskrypcja plików** - nowa opcja w menu aplikacji pozwalająca na ponowne przetworzenie nagrania, które zostało nieprawidłowo transkrybowane
+  - Submenu "Retranskrybuj plik..." z listą ostatnich 10 plików ze staging directory (`~/.olympus_transcriber/recordings/`)
+  - Automatyczne usuwanie istniejącej transkrypcji (MD/TXT) przed ponownym przetworzeniem
+  - Bezpieczne działanie dzięki ProcessLock - nie koliduje z automatyczną transkrypcją
+  - Automatyczne odświeżanie listy plików co 10 sekund
+  - Powiadomienia o statusie retranskrypcji (sukces/błąd)
+
 ## [1.9.1] - 2025-11-29
 
 ### Changed
@@ -614,6 +624,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.10.0** (2025-12-12) - File retranscription feature with menu app integration
 - **1.9.1** (2025-11-29) - Reduced false recorder detection triggers, optimized notification behavior
 - **1.9.0** (2025-11-28) - macOS application bundle, Full Disk Access setup, enhanced error handling, project backlog
 - **1.8.2** (2025-11-26) - Code quality improvements, PEP 8 compliance, CHANGELOG standardization
