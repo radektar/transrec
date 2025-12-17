@@ -1,6 +1,13 @@
 # Testing Guide
 
-Comprehensive guide for testing Olympus Transcriber.
+> **Wersja:** v2.0.0 (w przygotowaniu)
+>
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [DEVELOPMENT.md](DEVELOPMENT.md) - Przewodnik deweloperski
+> - [API.md](API.md) - Dokumentacja API modułów
+
+Comprehensive guide for testing Transrec.
 
 ## 📋 Test Types
 
@@ -15,7 +22,7 @@ Comprehensive guide for testing Olympus Transcriber.
 ### Setup
 
 ```bash
-cd ~/CODE/Olympus_transcription
+cd ~/CODEing/transrec  # lub twoja ścieżka do projektu
 source venv/bin/activate
 pip install -r requirements-dev.txt
 ```

@@ -1,11 +1,21 @@
 # Development Guide
 
+> **Wersja:** v2.0.0 (w przygotowaniu)
+>
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [ARCHITECTURE.md](ARCHITECTURE.md) - Architektura systemu
+> - [API.md](API.md) - Dokumentacja API modułów
+> - [TESTING-GUIDE.md](TESTING-GUIDE.md) - Przewodnik testowania
+> - [PUBLIC-DISTRIBUTION-PLAN.md](PUBLIC-DISTRIBUTION-PLAN.md) - Plan dystrybucji
+
 ## 🚀 Quick Start
 
 ### 1. Clone and Setup
 
 ```bash
-cd ~/CODE/Olympus_transcription
+git clone https://github.com/yourusername/transrec.git
+cd transrec
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
@@ -13,13 +23,23 @@ pip install -r requirements.txt
 pip install -r requirements-dev.txt
 ```
 
-### 2. Run Locally
+### 2. Install whisper.cpp
 
 ```bash
-python src/main.py
+bash scripts/install_whisper_cpp.sh
 ```
 
-### 3. Run Tests
+### 3. Run Locally
+
+```bash
+# Menu bar app (recommended)
+python -m src.menu_app
+
+# CLI mode
+python -m src.main
+```
+
+### 4. Run Tests
 
 ```bash
 pytest tests/ -v
@@ -28,30 +48,65 @@ pytest tests/ -v
 ## 📁 Project Structure
 
 ```
-Olympus_transcription/
+transrec/
 ├── src/
-│   ├── __init__.py         # Package definition
-│   ├── config.py           # Configuration management
-│   ├── logger.py           # Logging setup
-│   ├── file_monitor.py     # FSEvents monitoring
-│   ├── transcriber.py      # Transcription engine
-│   └── main.py            # Application entry point
+│   ├── __init__.py           # Package definition
+│   ├── config.py             # Configuration management
+│   ├── logger.py             # Logging setup
+│   ├── file_monitor.py       # FSEvents monitoring
+│   ├── transcriber.py        # Transcription engine
+│   ├── markdown_generator.py # MD file generation
+│   ├── state_manager.py      # State persistence
+│   ├── menu_app.py           # Menu bar application
+│   ├── app_core.py           # Core daemon logic
+│   ├── summarizer.py         # AI summaries (PRO)
+│   └── tagger.py             # Auto-tagging (PRO)
 ├── tests/
-│   ├── test_config.py      # Config tests
-│   ├── test_transcriber.py # Transcriber tests
-│   └── test_file_monitor.py # Monitor tests
+│   ├── test_config.py
+│   ├── test_transcriber.py
+│   ├── test_file_monitor.py
+│   ├── test_state_manager.py
+│   └── ...
 ├── Docs/
-│   ├── ARCHITECTURE.md     # System architecture
-│   ├── DEVELOPMENT.md      # This file
-│   ├── INSTALLATION-GUIDE  # Installation instructions
-│   └── CURSOR-WORKFLOW.md  # Cursor IDE workflow
-├── requirements.txt        # Production dependencies
-├── requirements-dev.txt    # Development dependencies
-├── setup.sh               # LaunchAgent installer
-└── README.md              # Project overview
+│   ├── ARCHITECTURE.md       # System architecture
+│   ├── API.md                # API documentation
+│   ├── DEVELOPMENT.md        # This file
+│   └── ...
+├── scripts/
+│   ├── install_whisper_cpp.sh
+│   └── ...
+├── .cursor/rules/            # Cursor IDE rules
+├── requirements.txt          # Production dependencies
+├── requirements-dev.txt      # Development dependencies
+└── README.md                 # Project overview
 ```
 
 ## 🔧 Development Workflow
+
+### Git Flow
+
+Projekt używa Git Flow. Szczegóły w `.cursor/rules/git-workflow.mdc`.
+
+```bash
+# Nowa funkcja
+git checkout develop
+git pull origin develop
+git checkout -b feature/nazwa-funkcji
+
+# Po zakończeniu
+git checkout develop
+git merge feature/nazwa-funkcji
+git push origin develop
+```
+
+### Commit Messages
+
+Format: `v2.0.0: Opis zmiany`
+
+```bash
+git commit -m "v2.0.0: Add universal volume detection"
+git commit -m "v2.0.0: Fix FSEvents callback race condition"
+```
 
 ### Code Quality
 
@@ -87,51 +142,42 @@ pytest tests/ --cov=src --cov-report=html
 # Run specific test file
 pytest tests/test_transcriber.py -v
 
-# Run with verbose output
-pytest tests/ -v -s
-```
-
-### Debugging
-
-#### VS Code / Cursor
-
-1. Set breakpoints by clicking left margin
-2. Press F5 or use Debug panel
-3. Select "Debug Main" configuration
-4. Step through code with F10 (step over) or F11 (step into)
-
-#### Logging
-
-```bash
-# Watch application logs
-tail -f ~/Library/Logs/olympus_transcriber.log
-
-# Watch LaunchAgent logs
-tail -f /tmp/olympus-transcriber-out.log
-tail -f /tmp/olympus-transcriber-err.log
+# Open coverage report
+open htmlcov/index.html
 ```
 
 ## 🧪 Testing Strategy
 
 ### Unit Tests
 
-Each module has corresponding unit tests:
+Każdy moduł ma odpowiadające testy:
 
 - `test_config.py` - Configuration validation
 - `test_transcriber.py` - Core transcription logic
 - `test_file_monitor.py` - FSEvents monitoring
+- `test_state_manager.py` - State persistence
+- `test_markdown_generator.py` - MD generation
 
 ### Test Fixtures
 
-Common fixtures in `tests/conftest.py`:
+Common fixtures w `tests/conftest.py`:
 
-- `tmp_path` - Temporary directory (pytest built-in)
-- `mock_callback` - Mock function for callbacks
-- `transcriber` - Transcriber instance with mocked logger
+```python
+@pytest.fixture
+def mock_volume(tmp_path):
+    """Create mock volume with audio files."""
+    volume = tmp_path / "RECORDER"
+    volume.mkdir()
+    (volume / "recording.mp3").touch()
+    return volume
+
+@pytest.fixture
+def transcriber():
+    """Transcriber instance with mocked dependencies."""
+    return Transcriber()
+```
 
 ### Mocking
-
-Use `unittest.mock` for external dependencies:
 
 ```python
 from unittest.mock import Mock, patch
@@ -142,116 +188,38 @@ def test_transcribe(mock_run):
     # Test code here
 ```
 
+Szczegóły: **[TESTING-GUIDE.md](TESTING-GUIDE.md)**
+
 ## 📋 Staging Workflow
 
 ### Overview
 
-The transcription system uses a **staging workflow** to ensure reliability when working with external recorder devices that may unmount during processing.
+System używa **staging workflow** dla stabilności:
 
-### How It Works
+1. **File Discovery**: Skanuj dysk zewnętrzny
+2. **Staging**: Kopiuj do `~/.transrec/recordings/`
+3. **Transcription**: Przetwarzaj lokalną kopię
+4. **State Update**: Aktualizuj stan tylko jeśli wszystko succeeded
 
-1. **File Discovery**: `find_audio_files()` scans the recorder for new files
-2. **Staging**: `_stage_audio_file()` copies each file to `LOCAL_RECORDINGS_DIR` (default: `~/.olympus_transcriber/recordings`)
-3. **Transcription**: `transcribe_file()` processes the staged copy (not the original)
-4. **State Management**: `last_sync` is only updated if ALL files in batch succeeded
+### Benefits
 
-### Key Benefits
-
-- **Stability**: Transcription continues even if recorder unmounts mid-process
-- **Data Safety**: Original files on recorder are never modified or deleted
-- **Error Recovery**: Failed files remain in queue (not lost) if staging fails
-
-### Configuration
-
-Staging directory is configured in `src/config.py`:
-
-```python
-LOCAL_RECORDINGS_DIR: Path = None  # Defaults to ~/.olympus_transcriber/recordings
-```
-
-#### Multi-Computer Setup: TRANSCRIBE_DIR Configuration
-
-When running the application on multiple Macs with different usernames, you need to ensure all instances point to the **same synchronized vault directory** to prevent duplicate transcriptions.
-
-**Problem:**
-- Default `TRANSCRIBE_DIR` uses `Path.home()`, which resolves to different paths on different computers
-- Each computer would have its own local state file, potentially causing duplicate transcriptions
-
-**Solution:**
-Set the `OLYMPUS_TRANSCRIBE_DIR` environment variable on each computer to point to the same synchronized Obsidian vault directory.
-
-**On each computer:**
-
-1. **Option A: Using `.env` file** (recommended for development)
-   
-   Create or edit `.env` in the project root:
-   ```bash
-   OLYMPUS_TRANSCRIBE_DIR="/Users/your_username/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian/11-Transcripts"
-   ```
-
-2. **Option B: Using shell environment** (recommended for production)
-   
-   Add to `~/.zshrc` (or `~/.bash_profile`):
-   ```bash
-   export OLYMPUS_TRANSCRIBE_DIR="/Users/your_username/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian/11-Transcripts"
-   ```
-   
-   Then reload:
-   ```bash
-   source ~/.zshrc
-   ```
-
-**Important:**
-- All computers must point to the **exact same directory** (same vault, same folder)
-- The application checks for existing transcriptions by looking for markdown files with matching `source: <audio_file>` in YAML frontmatter
-- As long as all instances use the same `TRANSCRIBE_DIR`, duplicate transcriptions are automatically prevented
-
-**Verification:**
-When the application starts, it logs the transcription directory being used:
-```
-✓ TRANSCRIBE_DIR set from OLYMPUS_TRANSCRIBE_DIR: /path/to/vault
-```
-or
-```
-ℹ️  TRANSCRIBE_DIR using default path (set OLYMPUS_TRANSCRIBE_DIR to override)
-```
-
-**Warning:**
-If the directory doesn't appear to be in a synced location (iCloud/Obsidian), the application will log a warning reminding you to use a synchronized vault for multi-computer setups.
+- **Stability**: Transkrypcja kontynuuje nawet gdy dysk odmontowany
+- **Data Safety**: Oryginalne pliki nietknięte
+- **Error Recovery**: Failed files pozostają w kolejce
 
 ### Testing Staging
 
 ```bash
-# Test staging functionality
 pytest tests/test_transcriber.py::test_stage_audio_file_success -v
-
-# Test batch failure handling
-pytest tests/test_transcriber.py::test_process_recorder_batch_failure_handling -v
 ```
-
-### Debugging Staging Issues
-
-**Check staging directory:**
-```bash
-ls -la ~/.olympus_transcriber/recordings/
-```
-
-**Monitor staging in logs:**
-```bash
-tail -f ~/Library/Logs/olympus_transcriber.log | grep -i stage
-```
-
-**Common Issues:**
-- Staging fails → Check disk space and permissions
-- Files not reused → Verify mtime preservation with `shutil.copy2()`
-- Batch failures → Check logs for specific error messages
 
 ## 🔄 Development Cycle
 
 ### 1. Create Feature Branch
 
 ```bash
-git checkout -b feature/new-feature
+git checkout develop
+git checkout -b feature/faza-X-nazwa
 ```
 
 ### 2. Write Tests (TDD)
@@ -291,78 +259,67 @@ mypy src/
 
 ```bash
 git add -A
-git commit -m "feat: add new feature"
+git commit -m "v2.0.0: Add new feature"
 ```
 
-## 🐛 Debugging Common Issues
+### 7. Merge to develop
 
-### FSEvents Not Working
+```bash
+git checkout develop
+git merge feature/faza-X-nazwa
+git push origin develop
+```
 
-**Symptom:** Monitor doesn't detect recorder
+## 🐛 Debugging
 
-**Solutions:**
-1. Check if FSEvents is installed:
-   ```bash
-   pip list | grep MacFSEvents
-   ```
-2. Verify /Volumes is accessible:
-   ```bash
-   ls -la /Volumes
-   ```
-3. Check logs for errors:
-   ```bash
-   tail -f ~/Library/Logs/olympus_transcriber.log
-   ```
+### VS Code / Cursor
 
-### MacWhisper Not Found
+1. Set breakpoints
+2. Press F5 or use Debug panel
+3. Select configuration
+4. Step through code
 
-**Symptom:** "MacWhisper not found" warning
+### Logging
 
-**Solutions:**
-1. Install MacWhisper from official source
-2. Update `MACWHISPER_PATHS` in `src/config.py`
-3. Verify path exists:
-   ```bash
-   ls -la /Applications/MacWhisper.app/Contents/MacOS/MacWhisper
-   ```
+```bash
+# Watch application logs
+tail -f ~/Library/Logs/transrec.log
 
-### LaunchAgent Won't Start
+# Watch with grep
+tail -f ~/Library/Logs/transrec.log | grep -i error
+```
 
-**Symptom:** Agent loads but doesn't run
+### Common Issues
 
-**Solutions:**
-1. Check status:
-   ```bash
-   launchctl list | grep olympus-transcriber
-   ```
-2. View errors:
-   ```bash
-   cat /tmp/olympus-transcriber-err.log
-   ```
-3. Verify Python path in plist:
-   ```bash
-   cat ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
-   ```
-4. Reload agent:
-   ```bash
-   launchctl unload ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
-   launchctl load ~/Library/LaunchAgents/com.user.olympus-transcriber.plist
-   ```
+#### FSEvents Not Working
 
-### Import Errors
+```bash
+# Check if FSEvents is installed
+pip list | grep MacFSEvents
 
-**Symptom:** `ModuleNotFoundError` when running
+# Verify /Volumes is accessible
+ls -la /Volumes
+```
 
-**Solutions:**
-1. Ensure virtual environment is activated:
-   ```bash
-   source venv/bin/activate
-   ```
-2. Reinstall dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Check PYTHONPATH includes project root
+#### whisper.cpp Not Found
+
+```bash
+# Reinstall
+bash scripts/install_whisper_cpp.sh
+
+# Verify path
+ls -la ~/whisper.cpp/main
+```
+
+#### Import Errors
+
+```bash
+# Ensure venv is activated
+source venv/bin/activate
+
+# Reinstall dependencies
+pip install -r requirements.txt
+```
 
 ## 📚 Code Style Guide
 
@@ -379,15 +336,15 @@ git commit -m "feat: add new feature"
 from pathlib import Path
 from typing import Optional
 
-def find_file(name: str, directory: Path) -> Optional[Path]:
-    """Find a file by name in directory.
+def find_audio_files(directory: Path, since: datetime) -> list[Path]:
+    """Find audio files modified after given datetime.
     
     Args:
-        name: Filename to search for
         directory: Directory to search in
+        since: Only return files modified after this time
         
     Returns:
-        Path to file if found, None otherwise
+        List of audio file paths sorted by modification time
         
     Raises:
         ValueError: If directory doesn't exist
@@ -395,16 +352,15 @@ def find_file(name: str, directory: Path) -> Optional[Path]:
     if not directory.exists():
         raise ValueError(f"Directory not found: {directory}")
     
-    for item in directory.rglob(name):
-        if item.is_file():
-            return item
-    
-    return None
+    return sorted(
+        [f for f in directory.rglob("*") if f.suffix in AUDIO_EXTENSIONS],
+        key=lambda f: f.stat().st_mtime
+    )
 ```
 
 ### Logging
 
-Always use the logger, never print():
+Always use logger, never print():
 
 ```python
 from src.logger import logger
@@ -419,8 +375,6 @@ print("Processing file")
 
 ### Error Handling
 
-Handle errors gracefully:
-
 ```python
 try:
     result = risky_operation()
@@ -432,68 +386,42 @@ except Exception as e:
     raise
 ```
 
-## 🔐 Security Considerations
+## 🔐 Security
 
 - No credentials in code
+- API keys via environment variables only
 - State file is local only
-- Logs may contain file paths (not sensitive)
-- MacWhisper runs locally (no cloud)
-- LaunchAgent runs as user (not root)
+- whisper.cpp runs locally
+- PRO features use secure backend API
 
 ## 🚀 Performance Tips
 
 ### FSEvents vs Polling
 
-FSEvents is much more efficient than polling:
+FSEvents is much more efficient:
 - Zero CPU when idle
 - Instant notification on changes
 - No battery impact
 
-### FSEvents System Directory Filtering
+### Transcription
 
-The `FileMonitor` class filters out macOS system directories to prevent false triggers:
-- **Ignored directories**: `.Spotlight-V100`, `.fseventsd`, `.Trashes`
-- **Why**: macOS Spotlight automatically indexes external volumes, causing frequent FSEvents notifications that don't represent actual recorder activity
-- **Implementation**: The `on_change` callback checks if the first component of the relative path within the recorder volume is in the ignored list
-- **Result**: Only real file changes (new recordings, file modifications) trigger the transcription workflow
-
-This filtering significantly reduces log noise and prevents unnecessary `process_recorder()` invocations when the recorder is connected but idle.
-
-### Transcription Optimization
-
-- Set appropriate timeout (default 30 min)
-- Process files sequentially to avoid resource contention
-- Use state file to avoid re-transcribing
+- Set appropriate timeout (default 1 hour)
+- Process files sequentially
+- Use state file to avoid re-processing
 
 ## 📊 Monitoring
 
 ### Health Checks
 
 ```bash
-# Is daemon running?
-launchctl list | grep olympus-transcriber
+# Is app running?
+pgrep -f "menu_app"
 
 # Recent activity?
-tail -20 ~/Library/Logs/olympus_transcriber.log
-
-# Disk space for transcriptions?
-df -h ~/Documents/Transcriptions/
+tail -20 ~/Library/Logs/transrec.log
 
 # State file status?
-cat ~/.olympus_transcriber_state.json
-```
-
-### Performance Metrics
-
-```bash
-# CPU usage
-ps aux | grep olympus_transcriber
-
-# Memory usage
-top -l 1 | grep -A 5 python
-
-# File count
-ls -l ~/Documents/Transcriptions/ | wc -l
+cat ~/.transrec_state.json | python -m json.tool
 ```
 
 ## 🤝 Contributing
@@ -501,50 +429,38 @@ ls -l ~/Documents/Transcriptions/ | wc -l
 ### Pull Request Process
 
 1. Fork the repository
-2. Create feature branch
+2. Create feature branch from `develop`
 3. Write tests for new features
 4. Ensure all tests pass
 5. Update documentation
-6. Submit pull request
+6. Submit PR to `develop`
 
 ### Commit Message Format
 
 ```
-<type>: <subject>
-
-<body>
-
-<footer>
+v2.0.0: <subject>
 ```
 
-Types:
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation
-- `style`: Formatting
-- `refactor`: Code restructuring
-- `test`: Tests
-- `chore`: Maintenance
-
-Example:
+Examples:
 ```
-feat: add support for FLAC audio files
-
-- Add .flac to AUDIO_EXTENSIONS
-- Update transcriber to handle FLAC
-- Add tests for FLAC transcription
-
-Closes #123
+v2.0.0: Add universal volume detection
+v2.0.0: Fix race condition in FSEvents callback
+v2.0.0: Update API documentation
 ```
 
 ## 📞 Getting Help
 
-- Check `Docs/ARCHITECTURE.md` for system design
-- Check `README.md` for usage guide
+- Check [ARCHITECTURE.md](ARCHITECTURE.md) for system design
+- Check [API.md](API.md) for module documentation
+- Check [README.md](../README.md) for usage guide
 - Check logs for errors
 - Open an issue on GitHub
 
+---
 
-
-
-
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [ARCHITECTURE.md](ARCHITECTURE.md) - Architektura systemu
+> - [API.md](API.md) - Dokumentacja API modułów
+> - [TESTING-GUIDE.md](TESTING-GUIDE.md) - Przewodnik testowania
+> - [PUBLIC-DISTRIBUTION-PLAN.md](PUBLIC-DISTRIBUTION-PLAN.md) - Plan dystrybucji v2.0.0

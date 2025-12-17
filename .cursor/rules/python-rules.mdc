@@ -1,6 +1,6 @@
 ---
-title: "Olympus Transcriber - Python Standards"
-description: "Python coding standards for this project"
+title: "Transrec - Python Standards"
+description: "Python coding standards for Transrec project"
 globs: "src/**/*.py"
 alwaysApply: true
 ---
@@ -23,12 +23,20 @@ alwaysApply: true
 - All file I/O must handle exceptions
 - All subprocess calls must have timeout
 
+# v2.0.0 Specific
+
+- Check `license_manager` before using PRO features
+- Use `UserSettings` dataclass for user configuration
+- Support any external volume, not just Olympus
+- GUI windows use tkinter (cross-platform within macOS)
+
 # Testing
 
 - Write tests before implementation (TDD)
 - Use pytest
 - All public functions must have tests
 - Use fixtures for common setup
+- Mock `license_manager` in tests
 
 # Error Handling
 
@@ -36,3 +44,18 @@ alwaysApply: true
 - Log all errors with appropriate level
 - Graceful degradation - continue on non-critical errors
 - Timeout protection on all long-running operations
+- FREE features must work even if PRO verification fails
+
+# Dataclasses & Types
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional, List
+
+@dataclass
+class Example:
+    """Always use dataclass for data structures."""
+    field: str
+    optional_field: Optional[str] = None
+```

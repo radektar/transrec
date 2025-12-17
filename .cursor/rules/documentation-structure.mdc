@@ -1,0 +1,117 @@
+---
+title: "Transrec - Documentation Structure"
+description: "Documentation organization and guidelines"
+globs: "**/*.md"
+alwaysApply: true
+---
+
+# Struktura Dokumentacji
+
+## Aktywne dokumenty
+
+### Root (`/`)
+```
+README.md         # Główny opis projektu (dla GitHub)
+QUICKSTART.md     # Szybki start dla developerów
+CHANGELOG.md      # Historia zmian (aktualizuj przy każdym release)
+BACKLOG.md        # Zaplanowane funkcje i TODO
+```
+
+### Docs/
+```
+PUBLIC-DISTRIBUTION-PLAN.md   # Główny plan v2.0.0 FREE/PRO
+ARCHITECTURE.md               # Architektura systemu
+API.md                        # Dokumentacja API modułów
+FULL_DISK_ACCESS_SETUP.md     # Instrukcja FDA dla użytkowników
+TESTING-GUIDE.md              # Przewodnik testowania
+DEVELOPMENT.md                # Przewodnik deweloperski
+```
+
+### Archiwum (nie używać)
+```
+Docs/archive/     # Stara dokumentacja (przed v2.0.0)
+archive/          # Stare pliki root (przed v2.0.0)
+```
+
+## Zasady dokumentacji
+
+1. **Aktualizuj CHANGELOG.md** przy każdej istotnej zmianie
+2. **Nie twórz nowych plików .md** bez uzasadnienia
+3. **Archiwizuj** zamiast usuwać starą dokumentację
+4. **Używaj polskiego** w dokumentacji (spójność)
+5. **Referencje do wersji** - zawsze oznaczaj dla jakiej wersji
+
+## Format CHANGELOG
+
+```markdown
+## [v2.0.0] - 2025-XX-XX - FREE Release
+### Added
+- Opis dodanej funkcji
+
+### Changed
+- Opis zmiany
+
+### Fixed
+- Opis naprawionego błędu
+```
+
+## Cross-references między dokumentami
+
+Każdy dokument powinien mieć na początku i końcu sekcję "Powiązane dokumenty":
+
+```markdown
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [ARCHITECTURE.md](ARCHITECTURE.md) - Architektura systemu
+> - [API.md](API.md) - Dokumentacja API modułów
+```
+
+### Mapa powiązań
+
+```
+README.md
+├── → QUICKSTART.md (szybki start)
+├── → CHANGELOG.md (historia)
+├── → BACKLOG.md (plany)
+├── → Docs/ARCHITECTURE.md (architektura)
+├── → Docs/API.md (API)
+├── → Docs/DEVELOPMENT.md (development)
+├── → Docs/FULL_DISK_ACCESS_SETUP.md (FDA)
+└── → Docs/PUBLIC-DISTRIBUTION-PLAN.md (plan)
+
+Docs/ARCHITECTURE.md
+├── → README.md
+├── → Docs/API.md
+├── → Docs/DEVELOPMENT.md
+└── → Docs/PUBLIC-DISTRIBUTION-PLAN.md
+
+Docs/API.md
+├── → README.md
+├── → Docs/ARCHITECTURE.md
+└── → Docs/DEVELOPMENT.md
+
+Docs/DEVELOPMENT.md
+├── → README.md
+├── → Docs/ARCHITECTURE.md
+├── → Docs/API.md
+├── → Docs/TESTING-GUIDE.md
+└── → Docs/PUBLIC-DISTRIBUTION-PLAN.md
+```
+
+### Kiedy aktualizować powiązane dokumenty
+
+Przy zmianach w:
+- **Architekturze** → aktualizuj ARCHITECTURE.md i API.md
+- **Nowych modułach** → aktualizuj API.md i ARCHITECTURE.md
+- **Konfiguracji** → aktualizuj API.md (config.py section)
+- **Workflow** → aktualizuj DEVELOPMENT.md
+- **Funkcjach użytkownika** → aktualizuj README.md
+
+## Dokumenty zaktualizowane dla v2.0.0
+
+- [x] `README.md` - generic recorder support
+- [x] `Docs/ARCHITECTURE.md` - nowa architektura (menu_app, feature flags)
+- [x] `Docs/API.md` - nowe moduły (summarizer, tagger, license_manager)
+- [x] `Docs/FULL_DISK_ACCESS_SETUP.md` - generic volume
+- [x] `Docs/DEVELOPMENT.md` - zaktualizowane ścieżki i linki
+- [x] `Docs/TESTING-GUIDE.md` - cross-references

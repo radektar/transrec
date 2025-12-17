@@ -1,0 +1,85 @@
+---
+title: "Transrec - Project Overview"
+description: "Main project rules and context"
+globs: "**/*"
+alwaysApply: true
+---
+
+# Transrec (Olympus Transcriber)
+
+## O projekcie
+
+Automatyczny system transkrypcji nagrań audio dla macOS.
+- Wykrywa podłączenie dysku/karty SD
+- Skanuje nowe pliki audio (.mp3, .wav, .m4a, .ogg)
+- Transkrybuje używając whisper.cpp (Core ML)
+- Zapisuje jako Markdown z YAML frontmatter
+
+## Aktualny stan
+
+**Wersja:** v1.10.0 (development)
+**Cel:** v2.0.0 FREE release (public distribution)
+
+## Kluczowe pliki
+
+- `src/main.py` - Entry point
+- `src/menu_app.py` - Menu bar application (rumps)
+- `src/file_monitor.py` - FSEvents monitor
+- `src/transcriber.py` - Whisper transcription
+- `src/config.py` - Configuration
+- `src/state_manager.py` - Processed files tracking
+
+## Dokumentacja
+
+- `Docs/PUBLIC-DISTRIBUTION-PLAN.md` - Plan dystrybucji publicznej
+- `Docs/ARCHITECTURE.md` - Architektura systemu
+- `CHANGELOG.md` - Historia zmian
+- `BACKLOG.md` - Zaplanowane funkcje
+
+## Technologie
+
+- **Python 3.12+**
+- **whisper.cpp** - transkrypcja (Core ML)
+- **rumps** - macOS menu bar
+- **py2app** - packaging do .app
+- **FastAPI** - backend (PRO)
+
+## Konwencje nazewnictwa
+
+```python
+# Klasy - PascalCase
+class FileMonitor:
+class TranscriptionEngine:
+
+# Funkcje/metody - snake_case
+def process_audio_file():
+def get_volume_name():
+
+# Stałe - UPPER_SNAKE_CASE
+AUDIO_EXTENSIONS = [".mp3", ".wav"]
+DEFAULT_TIMEOUT = 300
+```
+
+## Workflow
+
+1. **Przed zmianami** - przeczytaj CHANGELOG.md i BACKLOG.md
+2. **Feature branch** - `git checkout -b feature/nazwa`
+3. **Testy najpierw** - TDD approach
+4. **Commit** - jedna linia z wersją: `v2.0.0: Opis`
+5. **PR do develop** - nigdy bezpośrednio do main
+
+## Quick Start (development)
+
+```bash
+# Aktywacja środowiska
+source venv/bin/activate
+
+# Uruchomienie
+python -m src.main
+
+# Testy
+pytest tests/
+
+# Menu bar app
+python -m src.menu_app
+```

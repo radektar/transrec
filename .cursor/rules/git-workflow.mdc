@@ -1,0 +1,93 @@
+---
+title: "Transrec - Git Workflow"
+description: "Git Flow strategy and commit conventions for v2.0.0 development"
+globs: "**/*"
+alwaysApply: true
+---
+
+# Git Workflow - Git Flow
+
+## Branch Structure
+
+```
+main        → Produkcja (tylko releases)
+develop     → Integracja (baza dla feature branches)
+feature/*   → Nowe funkcje
+hotfix/*    → Bugfixy na produkcji
+release/*   → Przygotowanie release
+```
+
+## Branch Naming Convention
+
+Feature branches MUSI mieć format:
+- `feature/faza-X-nazwa` dla faz z planu (np. `feature/faza-1-universal-sources`)
+- `feature/opis-funkcji` dla mniejszych zmian (np. `feature/add-settings-window`)
+
+Hotfix branches:
+- `hotfix/opis-problemu` (np. `hotfix/fix-fda-detection`)
+
+## Commit Messages
+
+Format: **Jedna linia opisująca zmianę z referencją do wersji**
+
+```
+v2.0.0: Add UserSettings class for configuration
+v2.0.0: Fix FileMonitor to detect any external volume
+v2.0.0: Implement first-run wizard welcome screen
+```
+
+Dla bugfixów:
+```
+v2.0.1: Fix crash when recorder disconnected during scan
+```
+
+## Workflow Commands
+
+### Rozpoczęcie nowej fazy:
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/faza-X-nazwa
+```
+
+### Zakończenie fazy:
+```bash
+git checkout develop
+git merge feature/faza-X-nazwa
+git push origin develop
+git branch -d feature/faza-X-nazwa
+```
+
+### Release:
+```bash
+git checkout main
+git merge develop
+git tag -a v2.0.0 -m "Release v2.0.0 FREE"
+git push origin main --tags
+```
+
+## Aktualne fazy (v2.0.0 FREE)
+
+- [ ] Faza 1: `feature/faza-1-universal-sources`
+- [ ] Faza 2: `feature/faza-2-dependency-downloader`
+- [ ] Faza 3: `feature/faza-3-first-run-wizard`
+- [ ] Faza 4: `feature/faza-4-py2app`
+- [ ] Faza 5: `feature/faza-5-code-signing`
+- [ ] Faza 6: `feature/faza-6-dmg-release`
+- [ ] Faza 7: `feature/faza-7-settings-ui`
+- [ ] Faza 8: `feature/faza-8-freemium-infrastructure`
+
+## Wersje
+
+```
+v1.10.0      ← Obecna wersja (development)
+v2.0.0       ← FREE release (cel)
+v2.1.0       ← PRO release (po FREE)
+```
+
+## Ważne
+
+- NIGDY nie pushuj bezpośrednio do `main`
+- Zawsze pracuj na feature branch
+- Przed merge do develop - sprawdź czy testy przechodzą
+- Tag tylko na `main` po merge z `develop`

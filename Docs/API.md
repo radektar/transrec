@@ -1,14 +1,26 @@
 # API Documentation
 
-Complete API reference for Olympus Transcriber modules.
+> **Wersja:** v2.0.0 (w przygotowaniu)
+>
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [ARCHITECTURE.md](ARCHITECTURE.md) - Architektura systemu
+> - [DEVELOPMENT.md](DEVELOPMENT.md) - Przewodnik deweloperski
+
+Complete API reference for Transrec modules.
 
 ## Table of Contents
 
-- [config.py](#configpy)
-- [logger.py](#loggerpy)
-- [file_monitor.py](#file_monitorpy)
-- [transcriber.py](#transcriberpy)
-- [main.py](#mainpy)
+- [config.py](#configpy) - Konfiguracja
+- [logger.py](#loggerpy) - Logging
+- [file_monitor.py](#file_monitorpy) - FSEvents monitoring
+- [transcriber.py](#transcriberpy) - Silnik transkrypcji
+- [markdown_generator.py](#markdown_generatorpy) - Generator MD
+- [state_manager.py](#state_managerpy) - Zarządzanie stanem
+- [menu_app.py](#menu_apppy) - Menu bar app
+- [app_core.py](#app_corepy) - Core logic
+- [summarizer.py](#summarizerpy) - AI summaries (PRO)
+- [tagger.py](#taggerpy) - Auto-tagging (PRO)
 
 ---
 
@@ -24,16 +36,27 @@ Central configuration dataclass with all application settings.
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `RECORDER_NAMES` | `List[str]` | `["LS-P1", "OLYMPUS", "RECORDER"]` | Volume names to detect as recorder |
 | `TRANSCRIBE_DIR` | `Path` | `~/Documents/Transcriptions` | Output directory for transcriptions |
+| `LOCAL_RECORDINGS_DIR` | `Path` | `~/.transrec/recordings` | Staging directory for audio files |
 | `LOG_DIR` | `Path` | `~/Library/Logs` | Directory for log files |
-| `STATE_FILE` | `Path` | `~/.olympus_transcriber_state.json` | State file path |
-| `LOG_FILE` | `Path` | `~/Library/Logs/olympus_transcriber.log` | Main log file path |
-| `MACWHISPER_PATHS` | `List[str]` | `["/Applications/MacWhisper.app/...", ...]` | Possible MacWhisper locations |
-| `TRANSCRIPTION_TIMEOUT` | `int` | `1800` | Max transcription time (seconds) |
+| `STATE_FILE` | `Path` | `~/.transrec_state.json` | State file path |
+| `LOG_FILE` | `Path` | `~/Library/Logs/transrec.log` | Main log file path |
+| `WHISPER_CPP_PATH` | `Path` | `~/whisper.cpp/main` | Path to whisper.cpp binary |
+| `WHISPER_CPP_MODELS_DIR` | `Path` | `~/whisper.cpp/models` | Models directory |
+| `WHISPER_MODEL` | `str` | `"small"` | Model size (tiny/base/small/medium/large) |
+| `WHISPER_LANGUAGE` | `str` | `"pl"` | Transcription language |
+| `TRANSCRIPTION_TIMEOUT` | `int` | `3600` | Max transcription time (seconds) |
 | `PERIODIC_CHECK_INTERVAL` | `int` | `30` | Fallback check interval (seconds) |
-| `MOUNT_MONITOR_DELAY` | `int` | `1` | Wait after mount detection (seconds) |
-| `AUDIO_EXTENSIONS` | `set` | `{".mp3", ".wav", ".m4a", ".wma"}` | Supported audio formats |
+| `MOUNT_MONITOR_DELAY` | `int` | `2` | Wait after mount detection (seconds) |
+| `AUDIO_EXTENSIONS` | `set` | `{".mp3", ".wav", ".m4a", ".ogg"}` | Supported audio formats |
+
+#### Environment Variables
+
+| Variable | Config Field | Description |
+|----------|--------------|-------------|
+| `OLYMPUS_TRANSCRIBE_DIR` | `TRANSCRIBE_DIR` | Override output directory |
+| `WHISPER_CPP_PATH` | `WHISPER_CPP_PATH` | Override whisper.cpp path |
+| `ANTHROPIC_API_KEY` | - | API key for summaries (PRO) |
 
 #### Methods
 
@@ -41,7 +64,6 @@ Central configuration dataclass with all application settings.
 
 Creates necessary directories if they don't exist.
 
-**Example:**
 ```python
 from src.config import config
 
@@ -55,7 +77,7 @@ from src.config import config
 
 # Access configuration
 print(config.TRANSCRIBE_DIR)
-print(config.TRANSCRIPTION_TIMEOUT)
+print(config.WHISPER_MODEL)
 ```
 
 ---
@@ -68,7 +90,7 @@ Centralized logging configuration.
 
 ```python
 def setup_logger(
-    name: str = "olympus_transcriber",
+    name: str = "transrec",
     level: int = logging.INFO,
     log_to_file: bool = True,
     log_to_console: bool = True,
@@ -77,18 +99,7 @@ def setup_logger(
 
 Setup and return configured logger instance.
 
-#### Parameters
-
-- `name` (str): Logger name (default: "olympus_transcriber")
-- `level` (int): Logging level (default: INFO)
-- `log_to_file` (bool): Enable file handler (default: True)
-- `log_to_console` (bool): Enable console handler (default: True)
-
-#### Returns
-
-- `logging.Logger`: Configured logger instance
-
-#### Example
+### Global Instance
 
 ```python
 from src.logger import logger
@@ -99,15 +110,6 @@ logger.warning("Warning message")
 logger.error("Error occurred")
 ```
 
-### Global Instance
-
-```python
-from src.logger import logger
-
-# Use throughout application
-logger.info("Message here")
-```
-
 ---
 
 ## file_monitor.py
@@ -116,7 +118,7 @@ File system monitoring using FSEvents.
 
 ### Class: `FileMonitor`
 
-Monitors `/Volumes` for recorder mount events.
+Monitors `/Volumes` for external volume mount events.
 
 #### Constructor
 
@@ -125,15 +127,7 @@ def __init__(self, callback: Callable[[], None])
 ```
 
 **Parameters:**
-- `callback`: Function to call when recorder is detected
-
-#### Attributes
-
-| Name | Type | Description |
-|------|------|-------------|
-| `callback` | `Callable` | Function to trigger on detection |
-| `observer` | `Optional[Observer]` | FSEvents observer instance |
-| `is_monitoring` | `bool` | Flag if monitoring is active |
+- `callback`: Function to call when audio-containing volume is detected
 
 #### Methods
 
@@ -141,38 +135,31 @@ def __init__(self, callback: Callable[[], None])
 
 Start monitoring `/Volumes` for mount events.
 
-**Example:**
 ```python
 from src.file_monitor import FileMonitor
 
-def on_recorder_detected():
-    print("Recorder found!")
+def on_volume_detected():
+    print("Audio volume found!")
 
-monitor = FileMonitor(callback=on_recorder_detected)
+monitor = FileMonitor(callback=on_volume_detected)
 monitor.start()
 ```
-
-**Behavior:**
-- Creates FSEvents Observer
-- Watches `/Volumes` directory
-- Triggers callback when recorder name detected
-- Includes 1-second delay for full mount
-- Debounces rapid triggers (2 seconds)
 
 ##### `stop() -> None`
 
 Stop monitoring and clean up resources.
 
-**Example:**
-```python
-monitor.stop()
-```
+##### `_should_process_volume(volume_path: Path) -> bool` (v2.0.0)
 
-**Behavior:**
-- Stops FSEvents observer
-- Waits up to 5 seconds for clean shutdown
-- Sets `is_monitoring` to False
-- Logs stop event
+Check if volume should be processed (has audio files, is external).
+
+```python
+# Internal logic
+def _should_process_volume(self, volume_path: Path) -> bool:
+    if self._is_internal_volume(volume_path):
+        return False
+    return self._has_audio_files(volume_path)
+```
 
 ---
 
@@ -182,196 +169,152 @@ Core transcription engine.
 
 ### Class: `Transcriber`
 
-Handles recorder detection, file scanning, and transcription.
+Handles volume detection, file scanning, and transcription.
 
 #### Constructor
 
 ```python
-def __init__(self)
+def __init__(self, on_status_change: Optional[Callable] = None)
 ```
 
-Initializes transcriber with MacWhisper detection.
-
-#### Attributes
-
-| Name | Type | Description |
-|------|------|-------------|
-| `transcription_in_progress` | `Dict[str, bool]` | Tracks files being transcribed |
-| `macwhisper_path` | `Optional[str]` | Path to MacWhisper executable |
-| `recorder_monitoring` | `bool` | Flag if recorder is connected |
+**Parameters:**
+- `on_status_change`: Optional callback for status updates (for UI)
 
 #### Methods
 
-##### `find_recorder() -> Optional[Path]`
-
-Search for connected Olympus recorder.
-
-**Returns:**
-- `Path`: Recorder volume path if found
-- `None`: If no recorder detected
-
-**Example:**
-```python
-from src.transcriber import Transcriber
-
-transcriber = Transcriber()
-recorder = transcriber.find_recorder()
-
-if recorder:
-    print(f"Found at: {recorder}")
-```
-
-##### `get_last_sync_time() -> datetime`
-
-Get timestamp of last synchronization.
-
-**Returns:**
-- `datetime`: Last sync time, or 7 days ago if no state
-
-**Example:**
-```python
-last_sync = transcriber.get_last_sync_time()
-print(f"Last sync: {last_sync}")
-```
-
-##### `save_sync_time() -> None`
-
-Save current time as last sync timestamp.
-
-**Example:**
-```python
-transcriber.save_sync_time()
-```
-
-##### `find_audio_files(recorder_path: Path, since: datetime) -> List[Path]`
+##### `find_audio_files(volume_path: Path, since: datetime) -> List[Path]`
 
 Find new audio files modified after given datetime.
 
-**Parameters:**
-- `recorder_path`: Root path of recorder volume
-- `since`: Only return files modified after this time
-
-**Returns:**
-- `List[Path]`: Audio files sorted by modification time
-
-**Example:**
 ```python
 from datetime import datetime, timedelta
 from pathlib import Path
 
-recorder = Path("/Volumes/LS-P1")
+volume = Path("/Volumes/RECORDER")
 since = datetime.now() - timedelta(days=1)
-files = transcriber.find_audio_files(recorder, since)
-
-print(f"Found {len(files)} new files")
+files = transcriber.find_audio_files(volume, since)
 ```
 
 ##### `_stage_audio_file(audio_file: Path) -> Optional[Path]`
 
-Copy audio file from recorder to local staging directory.
+Copy audio file to local staging directory.
 
-This method creates a local copy of the recorder file before transcription,
-ensuring transcription can proceed even if the recorder unmounts during
-processing. The staged file preserves the original filename and modification
-time.
-
-**Parameters:**
-- `audio_file`: Path to audio file on recorder (e.g., `/Volumes/LS-P1/...`)
-
-**Returns:**
-- `Path`: Path to staged file in `LOCAL_RECORDINGS_DIR`, or `None` if staging failed
-
-**Behavior:**
-- Creates staging directory if it doesn't exist
-- Uses `shutil.copy2()` to preserve metadata and mtime
-- Reuses existing staged copy if size and mtime match
-- Handles `FileNotFoundError` and `OSError` gracefully (returns `None`)
-
-**Example:**
 ```python
-from pathlib import Path
-
-recorder_file = Path("/Volumes/LS-P1/RECORDER/FOLDER_E/251118_0058.MP3")
-staged_path = transcriber._stage_audio_file(recorder_file)
-
+staged_path = transcriber._stage_audio_file(audio_file)
 if staged_path:
-    print(f"Staged to: {staged_path}")
-else:
-    print("Staging failed - recorder may have unmounted")
+    # Process staged file
+    pass
 ```
 
 ##### `transcribe_file(audio_file: Path) -> bool`
 
 Transcribe a single audio file using whisper.cpp.
 
-**Parameters:**
-- `audio_file`: Path to audio file (typically a staged copy from `LOCAL_RECORDINGS_DIR`)
-
-**Returns:**
-- `True`: Transcription succeeded
-- `False`: Transcription failed or skipped
-
-**Example:**
 ```python
-from pathlib import Path
-
-# File should be staged first
-staged_file = Path("~/.olympus_transcriber/recordings/recording.mp3")
 success = transcriber.transcribe_file(staged_file)
-
-if success:
-    print("Transcription complete")
 ```
 
-**Behavior:**
-- Checks if whisper.cpp is available
-- Checks if already transcribed (by checking markdown files with matching `source:` field)
-- Tracks in-progress transcriptions
-- Runs whisper.cpp subprocess with timeout
-- Generates summary using LLM (if configured)
-- Creates markdown document with YAML frontmatter
-- Saves output to `TRANSCRIBE_DIR`
-- Logs all events
+##### `process_volume(volume_path: Path) -> None`
 
-**Note:** This method expects a local file path (staged copy), not a path on the recorder volume.
+Main workflow: scan volume, stage files, transcribe.
 
-##### `process_recorder() -> None`
-
-Main workflow: detect, scan, transcribe.
-
-**Example:**
 ```python
-transcriber.process_recorder()
+transcriber.process_volume(Path("/Volumes/RECORDER"))
 ```
-
-**Workflow:**
-1. Find recorder
-2. Get last sync time
-3. Find new audio files
-4. For each file:
-   - Stage file to local directory (`_stage_audio_file()`)
-   - Transcribe staged file (`transcribe_file()`)
-5. Save sync time (only if ALL files succeeded)
-
-**Behavior:**
-- Logs detailed progress
-- Handles errors gracefully
-- Updates `recorder_monitoring` flag
-- Tracks successes and failures separately
-- **Critical:** Only updates `last_sync` if all files in batch succeeded
-  - If any file fails (staging or transcription), `last_sync` is NOT updated
-  - This prevents losing unprocessed files that will be retried on next sync
-- Reports success/failure counts in logs
 
 ---
 
-## main.py
+## markdown_generator.py
 
-Application orchestrator and entry point.
+Markdown file generator with YAML frontmatter.
 
-### Class: `OlympusTranscriber`
+### Class: `MarkdownGenerator`
 
-Main application coordinator.
+#### Methods
+
+##### `generate(transcription: str, metadata: dict) -> str`
+
+Generate markdown content from transcription.
+
+```python
+from src.markdown_generator import MarkdownGenerator
+
+generator = MarkdownGenerator()
+content = generator.generate(
+    transcription="Text content...",
+    metadata={
+        "source": "recording.mp3",
+        "date": "2025-01-15",
+        "duration": "5:32",
+        "tags": ["meeting", "notes"]
+    }
+)
+```
+
+**Output:**
+```markdown
+---
+source: recording.mp3
+date: 2025-01-15
+duration: 5:32
+tags:
+  - meeting
+  - notes
+---
+
+# Transkrypcja
+
+Text content...
+```
+
+---
+
+## state_manager.py
+
+State persistence management.
+
+### Class: `StateManager`
+
+#### Methods
+
+##### `get_last_sync_time(volume_name: str) -> datetime`
+
+Get timestamp of last synchronization for volume.
+
+```python
+from src.state_manager import StateManager
+
+state = StateManager()
+last_sync = state.get_last_sync_time("LS-P1")
+```
+
+##### `save_sync_time(volume_name: str) -> None`
+
+Save current time as last sync timestamp.
+
+##### `reset_state(volume_name: str, since: Optional[datetime] = None) -> None`
+
+Reset state for volume (optionally to specific date).
+
+```python
+from datetime import datetime
+
+state.reset_state("LS-P1", since=datetime(2025, 1, 1))
+```
+
+##### `get_processed_files(volume_name: str) -> List[str]`
+
+Get list of already processed files for volume.
+
+---
+
+## menu_app.py
+
+macOS menu bar application.
+
+### Class: `OlympusMenuApp`
+
+rumps-based menu bar application.
 
 #### Constructor
 
@@ -379,16 +322,40 @@ Main application coordinator.
 def __init__(self)
 ```
 
-Initializes application and signal handlers.
+Creates menu bar app with:
+- Status indicator
+- Open logs action
+- Reset memory action
+- Settings action
+- Quit action
 
-#### Attributes
+#### Usage
 
-| Name | Type | Description |
-|------|------|-------------|
-| `transcriber` | `Optional[Transcriber]` | Transcription engine |
-| `monitor` | `Optional[FileMonitor]` | File system monitor |
-| `periodic_thread` | `Optional[Thread]` | Background checker thread |
-| `running` | `bool` | Application running flag |
+```bash
+python -m src.menu_app
+```
+
+---
+
+## app_core.py
+
+Core application logic.
+
+### Class: `AppState`
+
+Thread-safe state container.
+
+```python
+class AppState(Enum):
+    IDLE = "idle"
+    SCANNING = "scanning"
+    TRANSCRIBING = "transcribing"
+    ERROR = "error"
+```
+
+### Class: `OlympusTranscriber`
+
+Main application coordinator.
 
 #### Methods
 
@@ -396,69 +363,142 @@ Initializes application and signal handlers.
 
 Start the transcriber daemon.
 
-**Example:**
 ```python
-from src.main import OlympusTranscriber
+from src.app_core import OlympusTranscriber
 
 app = OlympusTranscriber()
-app.start()  # Blocks until stopped
+app.start()
 ```
-
-**Behavior:**
-1. Logs startup information
-2. Initializes Transcriber
-3. Initializes FileMonitor
-4. Starts FSEvents monitoring
-5. Starts periodic checker thread
-6. Enters keep-alive loop
 
 ##### `stop() -> None`
 
 Stop the daemon and cleanup.
 
-**Example:**
+##### `get_status() -> dict`
+
+Get current status for UI.
+
 ```python
-app.stop()
+status = app.get_status()
+# {
+#     "state": "idle",
+#     "current_file": None,
+#     "processed_count": 5,
+#     "error": None
+# }
 ```
 
-**Behavior:**
-1. Sets running flag to False
-2. Stops file monitor
-3. Waits for threads to finish
-4. Logs shutdown complete
+---
 
-### Function: `main()`
+## summarizer.py
 
-Main entry point for application.
+AI-powered summaries (PRO feature).
 
-**Example:**
+### Class: `Summarizer`
+
+#### Methods
+
+##### `summarize(text: str) -> Optional[str]`
+
+Generate AI summary of transcription.
+
 ```python
-if __name__ == "__main__":
-    from src.main import main
-    main()
+from src.summarizer import Summarizer
+
+summarizer = Summarizer()
+summary = summarizer.summarize(transcription_text)
 ```
 
-**Behavior:**
-- Creates OlympusTranscriber instance
-- Calls start()
-- Handles exceptions
-- Sets exit code
+**Note:** Requires PRO license. Returns `None` if license not valid.
+
+##### `generate_title(text: str) -> Optional[str]`
+
+Generate title from transcription.
+
+```python
+title = summarizer.generate_title(transcription_text)
+# "Spotkanie zespołu - planowanie Q1"
+```
+
+---
+
+## tagger.py
+
+Auto-tagging system (PRO feature).
+
+### Class: `Tagger`
+
+#### Methods
+
+##### `generate_tags(text: str) -> List[str]`
+
+Generate relevant tags from transcription.
+
+```python
+from src.tagger import Tagger
+
+tagger = Tagger()
+tags = tagger.generate_tags(transcription_text)
+# ["meeting", "planning", "team"]
+```
+
+**Note:** Requires PRO license. Returns empty list if license not valid.
+
+##### `get_available_tags() -> List[str]`
+
+Get list of all previously used tags.
+
+---
+
+## license_manager.py (v2.1.0 PRO)
+
+License verification and feature gating.
+
+### Class: `LicenseManager`
+
+#### Methods
+
+##### `verify_license() -> bool`
+
+Verify license with backend (cached for 7 days).
+
+```python
+from src.license_manager import license_manager
+
+if license_manager.verify_license():
+    # PRO features available
+    pass
+```
+
+##### `can_use_feature(feature: str) -> bool`
+
+Check if specific feature is available.
+
+```python
+if license_manager.can_use_feature("summaries"):
+    summary = summarizer.summarize(text)
+```
+
+##### `activate_license(license_key: str) -> bool`
+
+Activate PRO license.
+
+```python
+success = license_manager.activate_license("XXXXX-XXXXX-XXXXX")
+```
 
 ---
 
 ## Usage Examples
 
-### Basic Usage
+### Basic Transcription
 
 ```python
-from src.main import OlympusTranscriber
+from src.transcriber import Transcriber
+from pathlib import Path
 
-# Create and start application
-app = OlympusTranscriber()
-try:
-    app.start()
-except KeyboardInterrupt:
-    app.stop()
+transcriber = Transcriber()
+transcriber.process_volume(Path("/Volumes/RECORDER"))
 ```
 
 ### Custom Configuration
@@ -467,86 +507,23 @@ except KeyboardInterrupt:
 from src.config import config
 from pathlib import Path
 
-# Override default paths
+# Override paths
 config.TRANSCRIBE_DIR = Path.home() / "My Transcriptions"
-config.TRANSCRIPTION_TIMEOUT = 3600  # 1 hour
+config.WHISPER_MODEL = "medium"
 
-# Create directories
 config.ensure_directories()
 ```
 
-### Manual Transcription
+### With Status Callbacks
 
 ```python
 from src.transcriber import Transcriber
-from pathlib import Path
 
-transcriber = Transcriber()
+def on_status(state, current_file=None):
+    print(f"Status: {state}, File: {current_file}")
 
-# Transcribe single file
-audio_file = Path("/path/to/audio.mp3")
-success = transcriber.transcribe_file(audio_file)
-
-if success:
-    print("Done!")
-```
-
-### Custom Monitoring
-
-```python
-from src.file_monitor import FileMonitor
-from src.transcriber import Transcriber
-
-transcriber = Transcriber()
-
-def custom_callback():
-    print("Recorder detected!")
-    transcriber.process_recorder()
-
-monitor = FileMonitor(callback=custom_callback)
-monitor.start()
-
-# Keep alive
-try:
-    while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    monitor.stop()
-```
-
-### State Management
-
-```python
-from src.transcriber import Transcriber
-from datetime import datetime, timedelta
-
-transcriber = Transcriber()
-
-# Check last sync
-last_sync = transcriber.get_last_sync_time()
-print(f"Last sync: {last_sync}")
-
-# Save current sync time
-transcriber.save_sync_time()
-```
-
-### Logging
-
-```python
-from src.logger import logger
-
-# Different log levels
-logger.debug("Detailed debug info")
-logger.info("General information")
-logger.warning("Warning message")
-logger.error("Error occurred")
-logger.critical("Critical failure")
-
-# With exception info
-try:
-    risky_operation()
-except Exception as e:
-    logger.error("Operation failed", exc_info=True)
+transcriber = Transcriber(on_status_change=on_status)
+transcriber.process_volume(volume_path)
 ```
 
 ---
@@ -557,12 +534,13 @@ except Exception as e:
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List, Callable, Dict
+from enum import Enum
 
-# Common types used throughout
+# Common types
 PathLike = Path
 Callback = Callable[[], None]
+StatusCallback = Callable[[str, Optional[str]], None]
 AudioFiles = List[Path]
-StateDict = Dict[str, bool]
 TimeStamp = datetime
 ```
 
@@ -571,17 +549,16 @@ TimeStamp = datetime
 ## Constants
 
 ```python
-# From config.py
-DEFAULT_TIMEOUT = 1800  # 30 minutes
-DEFAULT_CHECK_INTERVAL = 30  # 30 seconds
-DEFAULT_MOUNT_DELAY = 1  # 1 second
-DEBOUNCE_INTERVAL = 2  # 2 seconds
+# Timeouts
+DEFAULT_TIMEOUT = 3600        # 1 hour
+DEFAULT_CHECK_INTERVAL = 30   # 30 seconds
+DEFAULT_MOUNT_DELAY = 2       # 2 seconds
 
 # Audio formats
-SUPPORTED_FORMATS = {".mp3", ".wav", ".m4a", ".wma"}
+SUPPORTED_FORMATS = {".mp3", ".wav", ".m4a", ".ogg", ".flac"}
 
-# Recorder names
-RECORDER_IDENTIFIERS = ["LS-P1", "OLYMPUS", "RECORDER"]
+# State
+OFFLINE_LICENSE_CACHE_DAYS = 7
 ```
 
 ---
@@ -592,7 +569,6 @@ All modules use comprehensive error handling:
 
 ```python
 try:
-    # Operation
     result = operation()
 except SpecificError as e:
     logger.error(f"Specific error: {e}")
@@ -604,17 +580,15 @@ except Exception as e:
 
 ## Threading Safety
 
-- `Transcriber.transcription_in_progress` is thread-safe (dict operations)
-- `OlympusTranscriber.running` is used as flag for thread coordination
-- All threads are daemon threads (won't block shutdown)
-- 5-second timeout on thread joins during shutdown
+- `AppState` uses thread-safe operations
+- `StateManager` uses file locking
+- All UI callbacks are thread-safe
+- Daemon threads for background operations
 
 ---
 
-For implementation details, see source code in `src/` directory.
-For usage examples, see `README.md` and `DEVELOPMENT.md`.
-
-
-
-
-
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [ARCHITECTURE.md](ARCHITECTURE.md) - Architektura systemu
+> - [DEVELOPMENT.md](DEVELOPMENT.md) - Przewodnik deweloperski
+> - [PUBLIC-DISTRIBUTION-PLAN.md](PUBLIC-DISTRIBUTION-PLAN.md) - Plan dystrybucji v2.0.0

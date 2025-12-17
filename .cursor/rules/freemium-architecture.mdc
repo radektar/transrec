@@ -1,0 +1,100 @@
+---
+title: "Transrec - Freemium Architecture"
+description: "Guidelines for FREE/PRO feature development"
+globs: "src/**/*.py"
+alwaysApply: true
+---
+
+# Freemium Model - FREE vs PRO
+
+## Feature Tiers
+
+### FREE (GitHub Download)
+- ✅ Wykrywanie podłączenia dysku
+- ✅ Skanowanie plików audio
+- ✅ Transkrypcja (whisper.cpp lokalnie)
+- ✅ Zapis do Markdown
+- ✅ Settings UI
+- ✅ Menu bar app
+
+### PRO (License Required)
+- 🔒 AI Summaries (Claude API)
+- 🔒 Auto-tagging
+- 🔒 Auto-title generation
+- 🔒 Cloud sync (Obsidian)
+- 🔒 Priority support
+
+## Feature Flags Implementation
+
+Wszystkie funkcje PRO MUSZĄ być kontrolowane przez `FeatureFlags`:
+
+```python
+from src.license_manager import license_manager
+
+# Sprawdzenie przed użyciem funkcji PRO
+if license_manager.can_use_feature("summaries"):
+    summary = self.summarizer.summarize(text)
+else:
+    logger.info("Summaries require PRO license")
+    summary = None
+```
+
+## Struktura kodu
+
+```
+src/
+├── core/           # Wszystkie tier (FREE+PRO)
+│   ├── file_monitor.py
+│   ├── transcriber.py
+│   └── markdown_generator.py
+├── pro/            # Tylko PRO features
+│   ├── summarizer.py      # z feature flag check
+│   ├── tagger.py          # z feature flag check
+│   └── cloud_sync.py      # z feature flag check
+├── license_manager.py     # Zarządzanie licencją
+├── feature_flags.py       # Definicje flag
+└── config.py              # Konfiguracja
+```
+
+## Zasady developmentu
+
+1. **Feature flags NA POCZĄTKU** - dodaj check przed implementacją
+2. **Graceful degradation** - bez PRO działa, tylko bez premium
+3. **UI feedback** - pokazuj użytkownikowi co wymaga PRO
+4. **Nie blokuj FREE flow** - transkrypcja musi działać zawsze
+5. **Loguj usage** - zbieraj info o używanych funkcjach (za zgodą)
+
+## Weryfikacja licencji
+
+```python
+# license_manager.py - cache locally, verify periodically
+class LicenseManager:
+    def verify_license(self) -> bool:
+        """Verifies license with backend or from cache."""
+        # 1. Check cache (valid for 7 days offline)
+        # 2. If online, verify with backend
+        # 3. Update cache with result
+```
+
+## Backend API (transrec-backend)
+
+PRO features wymagają połączenia z backendem:
+- `/api/v1/summarize` - AI summaries
+- `/api/v1/tags` - Auto-tagging
+- `/api/v1/title` - Title generation
+- `/api/v1/license/verify` - License check
+
+## Repozytoria
+
+```
+transrec        (public)  ← Main app (FREE + PRO client)
+transrec-backend (private) ← Backend API for PRO
+transrec.app    (public)  ← Marketing website (optional)
+```
+
+## Do NOT
+
+- ❌ Nie dodawaj hardcoded API keys
+- ❌ Nie implementuj PRO logic bez feature flag
+- ❌ Nie blokuj transkrypcji gdy brak licencji
+- ❌ Nie pushuj secrets do repo

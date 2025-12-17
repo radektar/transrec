@@ -1,319 +1,383 @@
 # System Architecture
 
+> **Wersja:** v2.0.0 (w przygotowaniu)
+> 
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [API.md](API.md) - Dokumentacja API modułów
+> - [DEVELOPMENT.md](DEVELOPMENT.md) - Przewodnik deweloperski
+> - [PUBLIC-DISTRIBUTION-PLAN.md](PUBLIC-DISTRIBUTION-PLAN.md) - Plan dystrybucji
+
 ## Overview
 
-Olympus Transcriber to system automatycznie transkrybujący pliki audio z rekordera Olympus LS-P1.
+Transrec to system automatycznie transkrybujący pliki audio z dowolnego dysku zewnętrznego (rekorder, karta SD, pendrive).
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     macOS System                             │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  FSEvents Monitor (src/file_monitor.py)              │   │
-│  │  - Watches /Volumes for mount events                 │   │
-│  │  - Triggers on recorder connection                   │   │
-│  └───────────────────┬──────────────────────────────────┘   │
-│                      │ (onChange callback)                   │
-│  ┌──────────────────┴──────────────────────────────────┐   │
-│  │  Transcriber Engine (src/transcriber.py)            │   │
-│  │  - Detects recorder path (/Volumes/LS-P1)           │   │
-│  │  - Scans for new audio files                        │   │
-│  │  - Manages transcription queue                      │   │
-│  └───────────────────┬──────────────────────────────────┘   │
-│                      │                                       │
-│  ┌──────────────────┴──────────────────────────────────┐   │
-│  │  MacWhisper Bridge                                  │   │
-│  │  - Spawns MacWhisper subprocess                     │   │
-│  │  - Monitors progress & timeout                      │   │
-│  │  - Handles errors                                   │   │
-│  └───────────────────┬──────────────────────────────────┘   │
-│                      │                                       │
-│                      ▼                                       │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  Output: ~/Documents/Transcriptions/                │   │
-│  │  - audio_file_1.txt                                 │   │
-│  │  - audio_file_2.txt                                 │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  State Management (~/.olympus_transcriber_state.json) │   │
-│  │  - Tracks last sync time                            │   │
-│  │  - Prevents duplicate transcriptions                │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │  Logging (~/Library/Logs/olympus_transcriber.log)    │   │
-│  │  - All events logged with timestamps                │   │
-│  │  - Debug during development                         │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        macOS System                              │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Menu Bar App (src/menu_app.py)                            │ │
+│  │  - rumps-based native macOS interface                      │ │
+│  │  - Status display & user actions                           │ │
+│  └───────────────────┬────────────────────────────────────────┘ │
+│                      │                                           │
+│  ┌───────────────────┴────────────────────────────────────────┐ │
+│  │  App Core (src/app_core.py)                                │ │
+│  │  - Thread-safe state management                            │ │
+│  │  - Orchestrates monitoring & transcription                 │ │
+│  └───────────────────┬────────────────────────────────────────┘ │
+│                      │                                           │
+│  ┌───────────────────┴────────────────────────────────────────┐ │
+│  │  FSEvents Monitor (src/file_monitor.py)                    │ │
+│  │  - Watches /Volumes for mount events                       │ │
+│  │  - Detects ANY external volume with audio files            │ │
+│  └───────────────────┬────────────────────────────────────────┘ │
+│                      │ (onChange callback)                       │
+│  ┌───────────────────┴────────────────────────────────────────┐ │
+│  │  Transcriber Engine (src/transcriber.py)                   │ │
+│  │  - Scans for new audio files                               │ │
+│  │  - Stages files locally before processing                  │ │
+│  │  - Manages transcription queue                             │ │
+│  └───────────────────┬────────────────────────────────────────┘ │
+│                      │                                           │
+│  ┌───────────────────┴────────────────────────────────────────┐ │
+│  │  whisper.cpp Engine                                        │ │
+│  │  - Native binary with Core ML acceleration                 │ │
+│  │  - Runs as subprocess with timeout protection              │ │
+│  └───────────────────┬────────────────────────────────────────┘ │
+│                      │                                           │
+│  ┌───────────────────┴────────────────────────────────────────┐ │
+│  │  Markdown Generator (src/markdown_generator.py)            │ │
+│  │  - Creates .md files with YAML frontmatter                 │ │
+│  │  - Formats transcription output                            │ │
+│  └───────────────────┬────────────────────────────────────────┘ │
+│                      │                                           │
+│                      ▼                                           │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Output: TRANSCRIBE_DIR (configurable)                     │ │
+│  │  - YYYY-MM-DD_Title.md files                               │ │
+│  │  - Ready for Obsidian/other markdown editors               │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  State Management (src/state_manager.py)                   │ │
+│  │  - ~/.transrec_state.json                                  │ │
+│  │  - Tracks processed files per volume                       │ │
+│  │  - Prevents duplicate transcriptions                       │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Logging (~/Library/Logs/transrec.log)                     │ │
+│  │  - All events logged with timestamps                       │ │
+│  │  - Configurable log level                                  │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Breakdown
 
-### 1. FSEvents Monitor (`src/file_monitor.py`)
+### 1. Menu Bar App (`src/menu_app.py`)
 
-**Odpowiedzialność:** Detektowanie połączenia recordera
+**Odpowiedzialność:** Interfejs użytkownika w pasku menu macOS
+
+```python
+OlympusMenuApp (rumps.App)
+├── title              # Status icon/text
+├── menu               # Dropdown menu items
+├── status_item()      # Current status display
+├── open_logs()        # Open log file
+├── reset_memory()     # Reset state
+├── settings()         # Open settings window
+└── quit()             # Clean shutdown
+```
+
+**Technologia:** `rumps` - Python library for macOS menu bar apps
+
+### 2. App Core (`src/app_core.py`)
+
+**Odpowiedzialność:** Koordynacja wszystkich komponentów
+
+```python
+OlympusTranscriber
+├── state: AppState           # Thread-safe state container
+├── transcriber: Transcriber  # Transcription engine
+├── monitor: FileMonitor      # FSEvents monitor
+├── start()                   # Start all components
+├── stop()                    # Clean shutdown
+└── get_status()              # Current status for UI
+```
+
+**AppState:**
+- `IDLE` - Oczekiwanie na dysk
+- `SCANNING` - Skanowanie plików
+- `TRANSCRIBING` - Transkrypcja w toku
+- `ERROR` - Błąd
+
+### 3. FSEvents Monitor (`src/file_monitor.py`)
+
+**Odpowiedzialność:** Wykrywanie podłączenia dysków zewnętrznych
 
 ```python
 FileMonitor
-├── start()           # Uruchom monitoring
-├── stop()            # Zatrzymaj monitoring
-└── on_change()       # Callback na zmianę w /Volumes
+├── start()           # Start monitoring /Volumes
+├── stop()            # Stop monitoring
+├── on_change()       # Callback on volume change
+└── _should_process_volume()  # Check if volume has audio
 ```
 
-**Mechanizm:**
-- MacFSEvents śledzi `/Volumes`
-- Na zmianę → callback
-- Czeka 1 sekundę na pełny mount
-- Uruchamia `Transcriber.process_recorder()`
+**Mechanizm (v2.0.0):**
+- Monitoruje `/Volumes` przez FSEvents
+- Wykrywa KAŻDY nowy dysk zewnętrzny
+- Sprawdza czy zawiera pliki audio
+- Czeka 2 sekundy na pełny mount
+- Uruchamia callback jeśli znaleziono audio
 
-**Zalety:**
-- ✅ Natychmiastowa reaktywność
-- ✅ Minimalne zużycie zasobów
-- ✅ Zero pollingu
+**Ignorowane katalogi:**
+- `.Spotlight-V100`, `.fseventsd`, `.Trashes`
+- Wewnętrzne dyski systemowe
 
-### 2. Transcriber Engine (`src/transcriber.py`)
+### 4. Transcriber Engine (`src/transcriber.py`)
 
-**Odpowiedzialność:** Zarządzanie procesem transkrypcji
+**Odpowiedzialność:** Proces transkrypcji
 
 ```python
 Transcriber
-├── find_recorder()             # Znaleź /Volumes/LS-P1
-├── find_audio_files()          # Znaleź nowe .mp3/.wav
-├── _stage_audio_file()         # Skopiuj plik do lokalnego stagingu
-├── get_last_sync_time()        # Pobierz czas ostatniego sync
-├── save_sync_time()            # Zapisz czas sync
-├── transcribe_file()           # Transkrybuj jeden plik (na staged copy)
-└── process_recorder()          # Główny workflow
+├── find_audio_files()        # Scan volume for audio
+├── _stage_audio_file()       # Copy to local staging
+├── transcribe_file()         # Run whisper.cpp
+├── process_volume()          # Main workflow
+└── on_status_change          # Callback for UI updates
 ```
 
 **Staging Workflow:**
-- Pliki z recordera są kopiowane do `LOCAL_RECORDINGS_DIR` przed transkrypcją
-- To zapewnia stabilność nawet gdy recorder się odmontowuje podczas przetwarzania
-- Pliki na rejestratorze pozostają nietknięte (nie są kasowane ani przenoszone)
-- Jeśli staging się nie powiedzie (np. recorder odmontowany), plik jest pomijany i `last_sync` nie jest aktualizowany
+1. Kopiuj plik z dysku do `~/.transrec/recordings/`
+2. Transkrybuj lokalną kopię (bezpieczne odmontowanie)
+3. Generuj markdown output
+4. Aktualizuj state
 
-**Workflow:**
-```
-process_recorder() 
-  ├─ find_recorder()
-  ├─ get_last_sync_time()
-  ├─ find_audio_files(since=last_sync)
-  └─ for each file:
-      ├─ _stage_audio_file()  # Copy to local staging directory
-      │   └─ shutil.copy2() preserves mtime and metadata
-      └─ transcribe_file(staged_file)
-          ├─ check if already done (state file)
-          ├─ run whisper.cpp subprocess (on local copy)
-          ├─ handle timeout/errors
-          └─ save to TRANSCRIBE_DIR/
-  └─ save_sync_time()  # Only if ALL files succeeded
+### 5. Markdown Generator (`src/markdown_generator.py`)
+
+**Odpowiedzialność:** Tworzenie plików .md
+
+```python
+MarkdownGenerator
+├── generate()                # Create markdown file
+├── _format_frontmatter()     # YAML frontmatter
+└── _format_content()         # Transcription content
 ```
 
-### 3. Main Process (`src/main.py`)
+**Output format:**
+```markdown
+---
+source: recording.mp3
+date: 2025-01-15
+duration: 5:32
+tags: []
+---
 
-**Odpowiedzialność:** Orchestration i background daemon
+# Transkrypcja
 
+[treść transkrypcji]
 ```
-main()
-├─ setup logger
-├─ create Transcriber instance
-├─ create FileMonitor instance
-├─ start FileMonitor (FSEvents thread)
-├─ start Periodic Check (fallback thread)
-└─ keep main thread alive
+
+### 6. State Manager (`src/state_manager.py`)
+
+**Odpowiedzialność:** Persystencja stanu
+
+```python
+StateManager
+├── get_last_sync_time()      # Read last sync for volume
+├── save_sync_time()          # Save current time
+├── reset_state()             # Reset for volume
+└── get_processed_files()     # List of processed files
 ```
 
-**Dwa wątki:**
-1. **FSEvents Monitor** - natychmiastowe odpowiadanie
-2. **Periodic Checker** - fallback co 30 sekund
-
-## State Management
-
-### State File: `~/.olympus_transcriber_state.json`
-
+**State file format (`~/.transrec_state.json`):**
 ```json
 {
-  "last_sync": "2025-11-19T10:35:00.123456"
+  "volumes": {
+    "LS-P1": {
+      "last_sync": "2025-01-15T10:30:00",
+      "processed_files": ["file1.mp3", "file2.wav"]
+    }
+  }
 }
 ```
 
-**Cel:**
-- Śledź czas ostatniego podłączenia
-- Znajdź NOWE pliki (mtime > last_sync)
-- Unikaj duplikatów
+## v2.0.0 Architecture Changes
 
-### Transcription Cache
+### Universal Volume Detection
 
-Wyniki transkrypcji w `~/Documents/Transcriptions/`:
-- `audio_1.txt` - audio_1.mp3 → transkrypcja
-- `audio_2.txt` - audio_2.wav → transkrypcja
+**Przed (v1.x):**
+```python
+# Hardcoded recorder names
+RECORDER_NAMES = ["LS-P1", "OLYMPUS"]
+if volume_name in RECORDER_NAMES:
+    process()
+```
 
-**Cel:**
-- Szybkie sprawdzenie czy już transkrybowany
-- Fallback jeśli state file zginie
+**Po (v2.0.0):**
+```python
+# Any external volume with audio files
+def _should_process_volume(volume_path: Path) -> bool:
+    if _is_internal_volume(volume_path):
+        return False
+    return _has_audio_files(volume_path)
+```
+
+### Feature Flags (Freemium)
+
+**Struktura:**
+```python
+from enum import Enum
+from dataclasses import dataclass
+
+class FeatureTier(Enum):
+    FREE = "free"
+    PRO = "pro"
+
+@dataclass
+class FeatureFlags:
+    transcription: FeatureTier = FeatureTier.FREE      # Always available
+    summaries: FeatureTier = FeatureTier.PRO           # License required
+    auto_tags: FeatureTier = FeatureTier.PRO           # License required
+    auto_title: FeatureTier = FeatureTier.PRO          # License required
+    cloud_sync: FeatureTier = FeatureTier.PRO          # License required
+```
+
+**Użycie:**
+```python
+from src.license_manager import license_manager
+
+if license_manager.can_use_feature("summaries"):
+    summary = summarizer.summarize(text)
+else:
+    summary = None  # Graceful degradation
+```
+
+### PRO Features Architecture (v2.1.0)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     PRO Features (v2.1.0)                        │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  License Manager (src/license_manager.py)                  │ │
+│  │  - Verify license with backend                             │ │
+│  │  - Cache locally (7 days offline)                          │ │
+│  │  - Feature gate checking                                   │ │
+│  └───────────────────┬────────────────────────────────────────┘ │
+│                      │                                           │
+│  ┌───────────────────┴────────────────────────────────────────┐ │
+│  │  Summarizer (src/summarizer.py)                            │ │
+│  │  - Generate AI summaries via backend API                   │ │
+│  │  - Feature flag: summaries                                 │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Tagger (src/tagger.py)                                    │ │
+│  │  - Auto-generate tags via backend API                      │ │
+│  │  - Feature flag: auto_tags                                 │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Cloud Sync (src/cloud_sync.py)                            │ │
+│  │  - Sync with Obsidian/iCloud                               │ │
+│  │  - Feature flag: cloud_sync                                │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  transrec-backend (private repo)                 │
+│                                                                  │
+│  FastAPI Server                                                  │
+│  ├── POST /api/v1/summarize      # AI summaries                 │
+│  ├── POST /api/v1/tags           # Auto-tagging                 │
+│  ├── POST /api/v1/title          # Title generation             │
+│  ├── GET  /api/v1/license/verify # License check                │
+│  └── POST /api/v1/license/activate # Activation                 │
+│                                                                  │
+│  External Services:                                              │
+│  ├── Claude API (Anthropic)      # LLM for summaries            │
+│  └── LemonSqueezy                # Payment & licensing          │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Configuration (`src/config.py`)
 
-Centralizowana konfiguracja:
+Centralizowana konfiguracja z obsługą zmiennych środowiskowych:
 
 ```python
-Config:
-  RECORDER_NAMES          # Nazwy możliwych voluminów
-  TRANSCRIBE_DIR          # Gdzie zapisywać transkrypcje
-  LOCAL_RECORDINGS_DIR    # Lokalny staging dla kopii plików z recordera
-  STATE_FILE              # Gdzie śledzić sync state
-  WHISPER_CPP_PATH        # Ścieżka do whisper.cpp binary
-  TRANSCRIPTION_TIMEOUT   # Maksymalny czas transkrypcji
+@dataclass
+class Config:
+    # Paths
+    TRANSCRIBE_DIR: Path          # Output directory
+    LOCAL_RECORDINGS_DIR: Path    # Staging directory
+    STATE_FILE: Path              # State persistence
+    LOG_FILE: Path                # Log file
+    
+    # whisper.cpp
+    WHISPER_CPP_PATH: Path        # Binary path
+    WHISPER_CPP_MODELS_DIR: Path  # Models directory
+    WHISPER_MODEL: str            # Model size (tiny/base/small/medium/large)
+    WHISPER_LANGUAGE: str         # Transcription language
+    
+    # Timeouts
+    TRANSCRIPTION_TIMEOUT: int    # Max transcription time (seconds)
+    MOUNT_MONITOR_DELAY: int      # Wait after mount (seconds)
+    
+    # Audio
+    AUDIO_EXTENSIONS: set         # Supported formats
 ```
 
-**Wyjaśnienie:**
-- Łatwo zmienić bez edycji innych plików
-- `config = Config()` w każdym module
-- Dla przyszłych integracji: możesz dodać `.env` support
-
-## Logging (`src/logger.py`)
-
-Centralizowany logger:
-
-```python
-logger = logging.getLogger("olympus_transcriber")
-├─ FileHandler  → ~/Library/Logs/olympus_transcriber.log
-├─ StreamHandler → Console (development)
-└─ formatter    → timestamp, module, level, message
-```
-
-**Logi systemowe (LaunchAgent):**
-- `/tmp/olympus-transcriber-out.log` - stdout
-- `/tmp/olympus-transcriber-err.log` - stderr
+Szczegóły: **[API.md](API.md#configpy)**
 
 ## Error Handling
 
 ### Graceful Degradation
 
-1. **MacWhisper nie znaleziony** → Log warning, czekaj na kolejny recorder
+1. **whisper.cpp nie znaleziony** → Pobierz przy pierwszym uruchomieniu
 2. **Timeout transkrypcji** → Log error, pomiń plik, kontynuuj
-3. **State file corrupted** → Reset to 1 week ago
-4. **FSEvents fails** → Fallback na periodic checking (co 30s)
+3. **State file corrupted** → Reset to 7 days ago
+4. **FSEvents fails** → Fallback na periodic checking
+5. **PRO license invalid** → Continue with FREE features only
 
 ### Retry Strategy
 
-Brak built-in retry - każde podłączenie recordera:
-- Szuka NOWYCH plików (od last_sync)
-- Jeśli transkrypcja failnęła poprzednio, spróbuje znowu
-- Jeśli succeedła, zostaje w Documents/
+- Każde podłączenie dysku = nowa próba dla nieprzetłumaczonych plików
+- `last_sync` aktualizowany tylko jeśli WSZYSTKIE pliki succeeded
+- Failed files pozostają w kolejce do następnej synchronizacji
 
-## UI Layer (Menu Bar App)
+## Performance
 
-### Menu App Architecture
-
-Since version 1.5.0, the application includes a macOS menu bar interface:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  macOS Menu Bar                                             │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  OlympusMenuApp (src/menu_app.py)                   │  │
-│  │  - rumps-based menu bar interface                    │  │
-│  │  - Status display                                    │  │
-│  │  - Menu actions (logs, reset, quit)                 │  │
-│  └───────────────────┬──────────────────────────────────┘  │
-│                      │                                       │
-│  ┌──────────────────┴──────────────────────────────────┐  │
-│  │  OlympusTranscriber (src/app_core.py)                │  │
-│  │  - Core daemon logic                                  │  │
-│  │  - Thread-safe state management                       │  │
-│  │  - FSEvents + Periodic monitoring                     │  │
-│  └───────────────────┬──────────────────────────────────┘  │
-│                      │                                       │
-│  ┌──────────────────┴──────────────────────────────────┐  │
-│  │  Transcriber (src/transcriber.py)                     │  │
-│  │  - Transcription workflow                              │  │
-│  │  - State updates via callback                          │  │
-│  └──────────────────────────────────────────────────────┘  │
-```
-
-**Key Components:**
-
-1. **AppState** (`src/app_core.py`)
-   - Thread-safe state container
-   - Status: IDLE, SCANNING, TRANSCRIBING, ERROR
-   - Current file tracking
-   - Error message storage
-
-2. **State Manager** (`src/state_manager.py`)
-   - Python API for state file management
-   - `reset_state()` - Reset last_sync date
-   - `get_last_sync_time()` - Read state
-   - `save_sync_time()` - Write state
-
-3. **Menu App** (`src/menu_app.py`)
-   - rumps-based macOS menu bar app
-   - Runs `OlympusTranscriber` in background thread
-   - Updates status every 2 seconds
-   - Provides GUI for common operations
-
-**Usage:**
-- CLI mode: `python src/main.py` (original daemon)
-- Tray app: `python src/menu_app.py` (with GUI)
-
-## Future Extensions
-
-### Planned Improvements
-
-1. **Obsidian Integration**
-   ```python
-   # Automatycznie tworzyć note w Obsidian vault
-   ObsidianBridge
-   ├── create_note()
-   ├── add_front_matter()
-   └── link_files()
-   ```
-
-2. **N8N Webhook**
-   ```python
-   # Powiadamiać N8N o nowych transkrypcjach
-   N8NNotifier
-   ├── send_webhook()
-   └── track_status()
-   ```
-
-3. **Web UI**
-   ```python
-   # Flask app dla management
-   FlaskAPI
-   ├── GET /status
-   ├── POST /transcribe
-   └── GET /history
-   ```
-
-4. **Database**
-   ```python
-   # SQLite dla historii
-   Database
-   ├── store_transcription()
-   ├── query_by_date()
-   └── export_report()
-   ```
-
-## Performance Considerations
-
-### Resources
-- **RAM:** ~50-100 MB (main process) + MacWhisper (~2GB)
+### Resource Usage
+- **RAM:** ~50-100 MB (idle) + whisper.cpp (~500MB-2GB during transcription)
 - **CPU:** Minimal during idle, ~80-100% during transcription
-- **Disk:** Depends on MacWhisper model + transcription output
+- **Disk:** Staging + output (temporary + permanent)
 
-### Optimization
+### Optimizations
 - FSEvents = zero-polling overhead
-- Single recorder at a time assumption
-- Async could be future improvement
+- Core ML acceleration on Apple Silicon
+- Sequential processing (one file at a time)
+- State file prevents re-processing
 
-## Security Notes
+## Security
 
-- No credentials stored in code
-- State file is local (~/.olympus_...)
-- Logs contain file paths (not sensitive)
-- MacWhisper runs locally (no cloud)
+- No credentials in code
+- API keys via environment variables only
+- Local state file (no cloud sync in FREE)
+- whisper.cpp runs locally (no cloud)
+- License verification cached locally
+
+---
+
+> **Powiązane dokumenty:**
+> - [README.md](../README.md) - Przegląd projektu
+> - [API.md](API.md) - Dokumentacja API modułów
+> - [DEVELOPMENT.md](DEVELOPMENT.md) - Przewodnik deweloperski
+> - [PUBLIC-DISTRIBUTION-PLAN.md](PUBLIC-DISTRIBUTION-PLAN.md) - Plan dystrybucji v2.0.0

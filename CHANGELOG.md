@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Olympus Transcriber will be documented in this file.
+All notable changes to Transrec will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,7 +8,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned Features
-- See `BACKLOG.md` for upcoming features and improvements
+- **🚀 Dystrybucja Publiczna (v2.0.0 FREE)** - Szczegółowy plan w [`Docs/PUBLIC-DISTRIBUTION-PLAN.md`](Docs/PUBLIC-DISTRIBUTION-PLAN.md)
+  - Prosta instalacja drag & drop (DMG)
+  - Wsparcie dla dowolnego recordera/karty SD
+  - First-run wizard z automatycznym pobieraniem whisper.cpp
+  - Code signing & notaryzacja
+- **🔒 PRO Features (v2.1.0)** - AI summaries, auto-tagging, cloud sync
+- See `BACKLOG.md` for other upcoming features and improvements
+
+---
+
+## [1.11.0] - 2025-12-17
+
+### Added
+- **Cursor Rules dla projektu** (`.cursor/rules/`)
+  - `git-workflow.mdc` - Git Flow strategy, branch naming, commit format
+  - `freemium-architecture.mdc` - FREE/PRO feature separation, feature flags
+  - `project-overview.mdc` - kontekst projektu dla AI
+  - `documentation-structure.mdc` - organizacja dokumentacji z cross-references
+  - Zaktualizowany `python-rules.mdc` z zasadami v2.0.0
+
+- **System cross-references między dokumentami**
+  - Każdy dokument zawiera header z wersją i powiązanymi dokumentami
+  - Mapa powiązań w `documentation-structure.mdc`
+  - Zasady aktualizacji powiązanych dokumentów przy zmianach
+
+- **Archiwum dokumentacji** (`Docs/archive/`, `archive/`)
+  - Stara dokumentacja przeniesiona do archiwum
+  - README w każdym archiwum z opisem zawartości
+
+### Changed
+- **README.md** - zaktualizowany dla v2.0.0
+  - Generic recorder support (nie tylko Olympus LS-P1)
+  - FREE/PRO feature table
+  - Cross-references do dokumentacji
+  - Roadmap v2.0.0 FREE i v2.1.0 PRO
+
+- **Docs/ARCHITECTURE.md** - nowa architektura v2.0.0
+  - Menu bar app jako główny interfejs
+  - Universal volume detection
+  - Feature flags dla freemium
+  - PRO features architecture (license_manager, backend API)
+  - Diagram z nową strukturą komponentów
+
+- **Docs/API.md** - rozszerzona dokumentacja API
+  - Nowe moduły: `markdown_generator`, `state_manager`, `menu_app`, `app_core`
+  - PRO moduły: `summarizer`, `tagger`, `license_manager`
+  - Zaktualizowane typy i przykłady użycia
+
+- **Docs/FULL_DISK_ACCESS_SETUP.md** - generic volume support
+  - Usunięte referencje do konkretnego recordera
+  - First-Run Wizard mention
+  - Zaktualizowane ścieżki
+
+- **Docs/DEVELOPMENT.md** - zaktualizowany przewodnik
+  - Poprawione ścieżki projektu
+  - Git Flow workflow
+  - Cross-references do innych dokumentów
+
+- **Docs/TESTING-GUIDE.md** - dodane cross-references
+
+### Removed
+- `Docs/requirements.md` - redundantny (jest `requirements.txt`)
+- `Docs/requirements-dev.md` - redundantny (jest `requirements-dev.txt`)
+
+### Archived
+- `Docs/INSTALLATION-GUIDE` → `Docs/archive/`
+- `Docs/olympus-setup-cursor.md` → `Docs/archive/`
+- `Docs/CURSOR-WORKFLOW.md` → `Docs/archive/`
+- `MIGRATION_SUMMARY.md` → `archive/`
+- `PROJECT-SUMMARY.md` → `archive/`
+- `OBSIDIAN-SETUP.md` → `archive/`
+
+### Documentation
+- Wszystkie dokumenty zaktualizowane dla v2.0.0
+- Spójna struktura cross-references
+- Cursor rules z zasadami Git Flow i freemium
+
+---
 
 ## [1.10.0] - 2025-12-12
 
@@ -624,6 +701,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.11.0** (2025-12-17) - Documentation v2.0.0, Cursor rules, Git Flow strategy
 - **1.10.0** (2025-12-12) - File retranscription feature with menu app integration
 - **1.9.1** (2025-11-29) - Reduced false recorder detection triggers, optimized notification behavior
 - **1.9.0** (2025-11-28) - macOS application bundle, Full Disk Access setup, enhanced error handling, project backlog
