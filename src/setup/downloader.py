@@ -153,16 +153,53 @@ class DependencyDownloader:
         return model_path.exists()
 
     def check_all(self) -> bool:
-        """Sprawdź czy wszystkie zależności są zainstalowane.
+        """Sprawdź czy wszystkie zależności są zainstalowane i zweryfikowane.
 
         Returns:
-            True jeśli wszystkie zależności są dostępne
+            True jeśli wszystkie zależności są dostępne i mają poprawne checksumy
         """
-        return (
+        # Sprawdź czy pliki istnieją
+        if not (
             self.is_whisper_installed()
             and self.is_ffmpeg_installed()
             and self.is_model_installed()
-        )
+        ):
+            return False
+        
+        # Weryfikuj checksumy
+        whisper_path = self.bin_dir / "whisper-cli"
+        ffmpeg_path = self.bin_dir / "ffmpeg"
+        model_path = self.models_dir / "ggml-small.bin"
+        
+        whisper_checksum = CHECKSUMS.get("whisper-cli")
+        ffmpeg_checksum = CHECKSUMS.get("ffmpeg-arm64")
+        model_checksum = CHECKSUMS.get("ggml-small.bin")
+        
+        # Weryfikuj whisper-cli
+        if whisper_checksum:
+            if not self.verify_checksum(whisper_path, whisper_checksum):
+                logger.warning(
+                    f"Checksum whisper-cli się nie zgadza - plik może być uszkodzony"
+                )
+                return False
+        
+        # Weryfikuj ffmpeg
+        if ffmpeg_checksum:
+            if not self.verify_checksum(ffmpeg_path, ffmpeg_checksum):
+                logger.warning(
+                    f"Checksum ffmpeg się nie zgadza - plik może być uszkodzony"
+                )
+                return False
+        
+        # Weryfikuj model
+        if model_checksum:
+            if not self.verify_checksum(model_path, model_checksum):
+                logger.warning(
+                    f"Checksum modelu się nie zgadza - plik może być uszkodzony"
+                )
+                return False
+        
+        return True
 
     def _download_file(
         self,
@@ -255,16 +292,20 @@ class DependencyDownloader:
                             + resume_from
                         )
                         downloaded = resume_from
+                        last_reported_percent = -1
 
                         # Pobierz w chunkach
                         for chunk in response.iter_bytes(chunk_size=8192):
                             f.write(chunk)
                             downloaded += len(chunk)
 
-                            # Progress callback
+                            # Progress callback - tylko gdy procent się zmieni
                             if self.progress_callback and total_size > 0:
-                                progress = downloaded / total_size
-                                self.progress_callback(name, progress)
+                                current_percent = int(downloaded * 100 / total_size)
+                                if current_percent != last_reported_percent:
+                                    last_reported_percent = current_percent
+                                    progress = downloaded / total_size
+                                    self.progress_callback(name, progress)
 
                 # Przenieś do docelowej lokalizacji
                 temp_path.rename(dest)
@@ -341,9 +382,17 @@ class DependencyDownloader:
         expected_size = SIZES.get("whisper-cli")
         expected_checksum = CHECKSUMS.get("whisper-cli")
 
+        # Sprawdź czy plik istnieje i ma poprawny checksum
         if self.is_whisper_installed():
-            logger.info("whisper-cli już zainstalowany")
-            return True
+            if expected_checksum and self.verify_checksum(dest, expected_checksum):
+                logger.info("whisper-cli już zainstalowany i zweryfikowany")
+                return True
+            else:
+                # Plik istnieje ale checksum się nie zgadza - usuń i pobierz ponownie
+                logger.warning(
+                    "whisper-cli istnieje ale checksum się nie zgadza - pobieranie ponownie"
+                )
+                dest.unlink()
 
         self._download_file(url, dest, "whisper-cli", expected_size, expected_checksum)
         return True
@@ -367,9 +416,17 @@ class DependencyDownloader:
         expected_size = SIZES.get("ffmpeg-arm64")
         expected_checksum = CHECKSUMS.get("ffmpeg-arm64")
 
+        # Sprawdź czy plik istnieje i ma poprawny checksum
         if self.is_ffmpeg_installed():
-            logger.info("ffmpeg już zainstalowany")
-            return True
+            if expected_checksum and self.verify_checksum(dest, expected_checksum):
+                logger.info("ffmpeg już zainstalowany i zweryfikowany")
+                return True
+            else:
+                # Plik istnieje ale checksum się nie zgadza - usuń i pobierz ponownie
+                logger.warning(
+                    "ffmpeg istnieje ale checksum się nie zgadza - pobieranie ponownie"
+                )
+                dest.unlink()
 
         self._download_file(url, dest, "ffmpeg", expected_size, expected_checksum)
         return True
@@ -395,9 +452,17 @@ class DependencyDownloader:
         expected_size = SIZES.get(f"ggml-{model}.bin")
         expected_checksum = CHECKSUMS.get(f"ggml-{model}.bin")
 
+        # Sprawdź czy plik istnieje i ma poprawny checksum
         if self.is_model_installed(model):
-            logger.info(f"Model {model} już zainstalowany")
-            return True
+            if expected_checksum and self.verify_checksum(dest, expected_checksum):
+                logger.info(f"Model {model} już zainstalowany i zweryfikowany")
+                return True
+            else:
+                # Plik istnieje ale checksum się nie zgadza - usuń i pobierz ponownie
+                logger.warning(
+                    f"Model {model} istnieje ale checksum się nie zgadza - pobieranie ponownie"
+                )
+                dest.unlink()
 
         self._download_file(
             url, dest, f"model-{model}", expected_size, expected_checksum

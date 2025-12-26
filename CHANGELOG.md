@@ -56,9 +56,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Zamiast błędu - warning i zwrócenie False (UI pokazuje ekran pobierania)
   - Sprawdzanie nowej lokalizacji przed fallback do starej
 - **src/menu_app.py** - Integracja z downloaderem
-  - Metoda `_check_dependencies()` sprawdza zależności przy starcie
+  - Metoda `_check_dependencies()` sprawdza zależności przy starcie (z opóźnieniem dla GUI)
   - Metoda `_download_dependencies()` pobiera z progress callback
   - Komunikaty błędów dla użytkownika (NetworkError, DiskSpaceError, DownloadError)
+  - Usunięto debug.log zapisy (11 miejsc)
+  - Zoptymalizowano progress callback (100x mniej wywołań)
+- **src/setup/downloader.py** - Weryfikacja checksum i auto-repair
+  - `check_all()` weryfikuje checksum dla wszystkich plików
+  - `download_whisper()`, `download_ffmpeg()`, `download_model()` auto-repair przy błędnym checksum
+  - Zoptymalizowano progress callback (tylko przy zmianie procentu, nie co 8KB)
 - **HTTP client** - Zmiana z urllib na httpx
   - Lepsze wsparcie dla przekierowań GitHub
   - Bardziej nowoczesne API
@@ -71,6 +77,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✅ Pobieranie whisper-cli, ffmpeg i modelu small działa poprawnie
 - ✅ Weryfikacja checksums działa
 - ✅ Repo zmienione na publiczne dla FREE release
+- ✅ **Testy manualne Fazy 2 zakończone** (2025-12-26)
+  - ✅ TEST M1: Pierwsze uruchomienie - wszystkie zależności pobrane
+  - ✅ TEST M2: Brak internetu - komunikat błędu działa poprawnie
+  - ✅ TEST M3: Resume download - wznawianie pobierania działa
+  - ✅ TEST M5: Uszkodzony plik - wykrycie i auto-repair działa
+  - ⏳ TEST M4: Brak miejsca na dysku (opcjonalny, pominięty)
+  - ⏳ TEST M6: Wolne połączenie (opcjonalny, pominięty)
 
 ### Technical Details
 - Lokalizacja zależności: `~/Library/Application Support/Transrec/`
