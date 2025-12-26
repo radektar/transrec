@@ -6,6 +6,9 @@ on:
     tags:
       - 'deps-v*'
 
+permissions:
+  contents: write
+
 jobs:
   build-whisper:
     runs-on: macos-14  # Apple Silicon runner
