@@ -224,6 +224,7 @@ class DependencyDownloader:
 
                 # Przygotuj request z Range header jeśli resume
                 req = Request(url)
+                req.add_header("User-Agent", "Transrec/2.0.0 (macOS; ARM64)")
                 if resume_from > 0:
                     req.add_header("Range", f"bytes={resume_from}-")
                     logger.info(f"Wznawianie pobierania od bajtu {resume_from}")
