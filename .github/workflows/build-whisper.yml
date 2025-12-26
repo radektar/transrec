@@ -41,8 +41,8 @@ jobs:
       - name: Download FFmpeg
         run: |
           # Pobierz statyczny ffmpeg z evermeet.cx (trusted source)
-          curl -L -o ffmpeg-arm64 https://evermeet.cx/ffmpeg/ffmpeg-6.1.zip
-          unzip -q ffmpeg-6.1.zip
+          curl -L -o ffmpeg.zip https://evermeet.cx/ffmpeg/getrelease/zip
+          unzip -q ffmpeg.zip
           chmod +x ffmpeg
           mv ffmpeg ffmpeg-arm64
       
