@@ -7,14 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned Features
+### In Progress
 - **🚀 Dystrybucja Publiczna (v2.0.0 FREE)** - Szczegółowy plan w [`Docs/PUBLIC-DISTRIBUTION-PLAN.md`](Docs/PUBLIC-DISTRIBUTION-PLAN.md)
-  - Prosta instalacja drag & drop (DMG)
-  - Wsparcie dla dowolnego recordera/karty SD
-  - First-run wizard z automatycznym pobieraniem whisper.cpp
-  - Code signing & notaryzacja
+  - ✅ **Faza 1:** Uniwersalne źródła nagrań (testy integracyjne zakończone, testy manualne wymagane)
+  - [ ] **Faza 2:** System pobierania whisper.cpp/modeli on-demand
+  - [ ] **Faza 3:** First-run wizard z konfiguracją
+  - [ ] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller)
+  - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
+  - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
+  - [ ] **Faza 7:** GUI Settings & polish
+  - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
+
+### Planned Features
 - **🔒 PRO Features (v2.1.0)** - AI summaries, auto-tagging, cloud sync
 - See `BACKLOG.md` for other upcoming features and improvements
+
+---
+
+## [Unreleased]
+
+### Added (v2.0.0 WIP - Faza 1)
+- **Testy integracyjne dla symulowanych volumów** (`tests/test_file_monitor_integration.py`)
+  - 11 testów pokrywających scenariusze z MANUAL_TESTING_PHASE_1.md
+  - Testy dla watch modes: auto, specific, manual
+  - Testy dla różnych formatów audio (mp3, wav, m4a, flac, aac, ogg)
+  - Testy dla volumów systemowych, pustych volumów, wielu volumów
+  - Testy debouncing i zagnieżdżonych katalogów
+  - Testy kompatybilności z legacy Olympus LS-P1
+  - Helper function `_setup_file_monitor_mocks()` do konfiguracji mocków z rozwiązaniem circular imports
+
+### Changed (v2.0.0 WIP - Faza 1)
+- **Dokumentacja testów manualnych** (`tests/MANUAL_TESTING_PHASE_1.md`)
+  - Dodano sekcję "Status testów" z podsumowaniem testów automatycznych
+  - Dodano notatkę o wymaganych testach manualnych przed produkcją
+  - Wyjaśniono różnicę między testami integracyjnymi a manualnymi
+- **BACKLOG.md** - Oznaczono Fazę 1 jako zakończoną z notatką o testach manualnych
+- **Docs/PUBLIC-DISTRIBUTION-PLAN.md** - Zaktualizowano checklist Fazy 1 z statusem testów
+
+### Testing (v2.0.0 WIP - Faza 1)
+- ✅ Wszystkie testy integracyjne przechodzą (11/11, 100% pass rate)
+- ✅ Testy jednostkowe dla `UserSettings` i `FileMonitor` przechodzą
+- ✅ Pokrycie kodem: `src/file_monitor.py` - 66% coverage
+- ⚠️ **Testy manualne na fizycznych urządzeniach wymagane przed produkcją v2.0.0 FREE**
+
+### Technical Details
+- Rozwiązano problem circular imports przez mockowanie `logger`/`config` przed importem `file_monitor`
+- Użyto `monkeypatch` zamiast `@patch` dla lepszej kontroli nad mockowaniem
+- Implementacja `callback_holder` pattern dla przechwytywania FSEvents callbacks w testach
 
 ---
 
@@ -84,6 +123,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wszystkie dokumenty zaktualizowane dla v2.0.0
 - Spójna struktura cross-references
 - Cursor rules z zasadami Git Flow i freemium
+- **Strategia testowania** - kompleksowa sekcja w PUBLIC-DISTRIBUTION-PLAN.md
+  - Testy per faza (Unit, Integration, E2E, Manual)
+  - Beta testing strategy
+  - Test environment matrix
+  - CI/CD automation
+  - Definition of Done dla v2.0.0 i v2.1.0
+- TESTING-GUIDE.md rozszerzony o testy v2.0.0
 
 ---
 

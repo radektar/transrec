@@ -37,6 +37,37 @@ alwaysApply: true
 - All public functions must have tests
 - Use fixtures for common setup
 - Mock `license_manager` in tests
+- Test file naming: `test_<module>.py`
+- Run tests before committing: `pytest tests/ -v`
+- Minimum coverage target: 80%
+
+## Test structure
+
+```python
+# tests/test_example.py
+import pytest
+from unittest.mock import Mock, patch
+
+class TestExample:
+    """Group related tests in class."""
+    
+    def test_success_case(self):
+        """Test normal operation."""
+        result = function_under_test()
+        assert result == expected
+    
+    def test_error_case(self):
+        """Test error handling."""
+        with pytest.raises(ExpectedError):
+            function_under_test(bad_input)
+    
+    @patch('src.module.external_dependency')
+    def test_with_mock(self, mock_dep):
+        """Test with mocked dependencies."""
+        mock_dep.return_value = "mocked"
+        result = function_under_test()
+        assert result == "mocked"
+```
 
 # Error Handling
 

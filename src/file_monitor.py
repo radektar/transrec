@@ -1,4 +1,4 @@
-"""File system monitoring for Olympus Transcriber using FSEvents."""
+"""File system monitoring for Transrec using FSEvents."""
 
 import time
 from typing import Callable, Optional
@@ -12,17 +12,24 @@ except ImportError:
 
 from src.logger import logger
 from src.config import config
+from src.config.settings import UserSettings
+from src.config.defaults import defaults
 
 
 class FileMonitor:
     """Monitor /Volumes for recorder mount events using FSEvents.
     
     This class uses macOS FSEvents API to efficiently monitor the /Volumes
-    directory for changes, specifically watching for when an Olympus recorder
-    is connected.
+    directory for changes, watching for any external volume (USB drive, SD card, etc.)
+    that contains audio files.
+    
+    Supports multiple watch modes:
+    - "auto": Automatically detect any volume with audio files
+    - "specific": Only watch volumes in the watched_volumes list
+    - "manual": Don't auto-detect (user selects manually)
     
     Attributes:
-        callback: Function to call when recorder is detected
+        callback: Function to call when recorder activity is detected
         observer: FSEvents Observer instance
         is_monitoring: Flag indicating if monitoring is active
     """
@@ -76,25 +83,35 @@ class FileMonitor:
                     logger.debug(f"Invalid path in FSEvents: {path}")
                     return
                 
-                # Detect which recorder root (if any) this path belongs to
-                recorder_root: Optional[Path] = None
-                for name in config.RECORDER_NAMES:
-                    candidate = Path("/Volumes") / name
+                # Detect which volume root (if any) this path belongs to
+                volume_root: Optional[Path] = None
+                
+                # Get user settings
+                settings = UserSettings.load()
+                
+                # Check if we should process this volume
+                volumes_path = Path("/Volumes")
+                for volume_name in volumes_path.iterdir():
+                    if not volume_name.is_dir():
+                        continue
+                    
                     try:
-                        path_obj.relative_to(candidate)
+                        path_obj.relative_to(volume_name)
                     except ValueError:
                         continue
                     else:
-                        recorder_root = candidate
-                        break
+                        # Found the volume containing this path
+                        if self._should_process_volume(volume_name, settings):
+                            volume_root = volume_name
+                            break
                 
-                if recorder_root is None:
-                    # Not under any known recorder root
+                if volume_root is None:
+                    # Not a volume we should process
                     return
                 
-                # Compute relative path inside the recorder volume
+                # Compute relative path inside the volume
                 try:
-                    relative = path_obj.relative_to(recorder_root)
+                    relative = path_obj.relative_to(volume_root)
                 except ValueError:
                     # Should not happen given the check above, but be safe
                     logger.debug(f"Could not compute relative path for: {path}")
@@ -106,7 +123,7 @@ class FileMonitor:
                     logger.debug(f"Ignoring system directory change: {path}")
                     return
                 
-                logger.info(f"📢 Detected recorder activity: {path}")
+                logger.info(f"📢 Detected volume activity: {path}")
                 self._last_trigger_time = current_time
                 
                 # Wait for system to fully mount the volume or finish writes
@@ -130,6 +147,79 @@ class FileMonitor:
         except Exception as e:
             logger.error(f"Failed to start FSEvents monitor: {e}", exc_info=True)
             self.is_monitoring = False
+    
+    def _should_process_volume(self, volume_path: Path, settings: UserSettings) -> bool:
+        """Check if volume should be processed based on watch mode.
+        
+        Args:
+            volume_path: Path to the volume (e.g., /Volumes/SD_CARD)
+            settings: UserSettings instance with watch configuration
+            
+        Returns:
+            True if volume should be processed, False otherwise
+        """
+        volume_name = volume_path.name
+        
+        # Ignore system volumes
+        if volume_name in defaults.SYSTEM_VOLUMES:
+            return False
+        
+        # Check watch mode
+        match settings.watch_mode:
+            case "auto":
+                # Auto mode: check if volume contains audio files
+                return self._has_audio_files(volume_path)
+            
+            case "specific":
+                # Specific mode: only process volumes in watched_volumes list
+                return volume_name in settings.watched_volumes
+            
+            case "manual":
+                # Manual mode: don't auto-process
+                return False
+            
+            case _:
+                # Unknown mode, default to False
+                logger.warning(f"Unknown watch_mode: {settings.watch_mode}")
+                return False
+    
+    def _has_audio_files(self, path: Path, max_depth: int = None) -> bool:
+        """Check if folder contains audio files.
+        
+        Args:
+            path: Path to check
+            max_depth: Maximum depth to scan (defaults to defaults.MAX_SCAN_DEPTH)
+            
+        Returns:
+            True if audio files found, False otherwise
+        """
+        if max_depth is None:
+            max_depth = defaults.MAX_SCAN_DEPTH
+        
+        audio_extensions = defaults.AUDIO_EXTENSIONS
+        
+        try:
+            for item in path.rglob("*"):
+                # Check depth limit
+                try:
+                    relative = item.relative_to(path)
+                    if len(relative.parts) > max_depth:
+                        continue
+                except ValueError:
+                    continue
+                
+                # Check if it's an audio file
+                if item.is_file() and item.suffix.lower() in audio_extensions:
+                    logger.debug(f"Found audio file: {item}")
+                    return True
+        except PermissionError:
+            logger.debug(f"Permission denied accessing {path}")
+            return False
+        except Exception as e:
+            logger.debug(f"Error scanning {path}: {e}")
+            return False
+        
+        return False
     
     def stop(self) -> None:
         """Stop monitoring."""
