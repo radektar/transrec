@@ -331,8 +331,8 @@ class DependencyDownloader:
 
         url = URLS["whisper"]
         dest = self.bin_dir / "whisper-cli"
-        expected_size = SIZES.get("whisper-cli-arm64")
-        expected_checksum = CHECKSUMS.get("whisper-cli-arm64")
+        expected_size = SIZES.get("whisper-cli")
+        expected_checksum = CHECKSUMS.get("whisper-cli")
 
         if self.is_whisper_installed():
             logger.info("whisper-cli już zainstalowany")

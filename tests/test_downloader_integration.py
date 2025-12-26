@@ -28,13 +28,17 @@ class TestDownloaderIntegration:
         except NetworkError:
             pytest.skip("Brak połączenia z internetem")
         
-        # Skip jeśli już zainstalowany
-        if downloader.is_whisper_installed():
-            pytest.skip("whisper-cli już zainstalowany")
+        # Usuń istniejący plik jeśli istnieje (dla czystego testu)
+        whisper_path = downloader.bin_dir / "whisper-cli"
+        if whisper_path.exists():
+            whisper_path.unlink()
         
-        # TODO: Odkomentuj po utworzeniu GitHub Release
-        # downloader.download_whisper()
-        # assert downloader.is_whisper_installed()
+        # Pobierz whisper-cli
+        assert downloader.download_whisper() is True
+        assert downloader.is_whisper_installed() is True
+        
+        # Sprawdź czy plik jest wykonywalny
+        assert whisper_path.stat().st_mode & 0o111 != 0
 
     @pytest.mark.slow
     @pytest.mark.integration
@@ -46,13 +50,39 @@ class TestDownloaderIntegration:
         except NetworkError:
             pytest.skip("Brak połączenia z internetem")
         
-        # Skip jeśli już zainstalowany
-        if downloader.is_ffmpeg_installed():
-            pytest.skip("ffmpeg już zainstalowany")
+        # Usuń istniejący plik jeśli istnieje (dla czystego testu)
+        ffmpeg_path = downloader.bin_dir / "ffmpeg"
+        if ffmpeg_path.exists():
+            ffmpeg_path.unlink()
         
-        # TODO: Odkomentuj po utworzeniu GitHub Release
-        # downloader.download_ffmpeg()
-        # assert downloader.is_ffmpeg_installed()
+        # Pobierz ffmpeg
+        assert downloader.download_ffmpeg() is True
+        assert downloader.is_ffmpeg_installed() is True
+        
+        # Sprawdź czy plik jest wykonywalny
+        assert ffmpeg_path.stat().st_mode & 0o111 != 0
+
+    @pytest.mark.slow
+    @pytest.mark.integration
+    def test_download_model_small_real(self, downloader):
+        """Test prawdziwego pobierania modelu small z HuggingFace."""
+        # Skip jeśli brak internetu
+        try:
+            downloader.check_network()
+        except NetworkError:
+            pytest.skip("Brak połączenia z internetem")
+        
+        # Usuń istniejący plik jeśli istnieje (dla czystego testu)
+        model_path = downloader.models_dir / "ggml-small.bin"
+        if model_path.exists():
+            model_path.unlink()
+        
+        # Pobierz model (to może potrwać kilka minut - 465MB)
+        assert downloader.download_model("small") is True
+        assert downloader.is_model_installed("small") is True
+        
+        # Sprawdź czy plik ma odpowiedni rozmiar
+        assert model_path.stat().st_size > 400_000_000  # >400MB
 
     @pytest.mark.slow
     @pytest.mark.integration
@@ -71,4 +101,27 @@ class TestDownloaderIntegration:
         # Weryfikuj
         assert downloader.verify_checksum(test_file, expected_checksum) is True
         assert downloader.verify_checksum(test_file, "wrong" * 16) is False
+    
+    @pytest.mark.slow
+    @pytest.mark.integration
+    def test_full_download_workflow(self, downloader):
+        """Test pełnego workflow pobierania wszystkich zależności."""
+        # Skip jeśli brak internetu
+        try:
+            downloader.check_network()
+        except NetworkError:
+            pytest.skip("Brak połączenia z internetem")
+        
+        # Sprawdź miejsce na dysku
+        downloader.check_disk_space()
+        
+        # Pobierz wszystkie zależności
+        downloader.download_whisper()
+        downloader.download_ffmpeg()
+        downloader.download_model("small")
+        
+        # Sprawdź czy wszystko jest zainstalowane
+        assert downloader.is_whisper_installed() is True
+        assert downloader.is_ffmpeg_installed() is True
+        assert downloader.is_model_installed("small") is True
 
