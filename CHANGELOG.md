@@ -24,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - Faza 2 WIP
+## [Unreleased] - Faza 2 COMPLETED ✅
 
-### Added (v2.0.0 WIP - Faza 2)
+### Added (v2.0.0 - Faza 2 COMPLETED)
 - **Moduł pobierania zależności** (`src/setup/downloader.py`)
   - Klasa `DependencyDownloader` z automatycznym pobieraniem whisper.cpp i ffmpeg
   - Weryfikacja checksum SHA256 dla bezpieczeństwa
@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Testy integracyjne** (`tests/test_downloader_integration.py`)
   - Podstawowa struktura (do rozbudowy po utworzeniu GitHub Release)
 
-### Changed (v2.0.0 WIP - Faza 2)
+### Changed (v2.0.0 - Faza 2 COMPLETED)
 - **src/config.py** - Nowa lokalizacja zależności
   - `WHISPER_CPP_PATH` domyślnie: `~/Library/Application Support/Transrec/bin/whisper-cli`
   - `WHISPER_CPP_MODELS_DIR` domyślnie: `~/Library/Application Support/Transrec/models/`
@@ -59,12 +59,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Metoda `_check_dependencies()` sprawdza zależności przy starcie
   - Metoda `_download_dependencies()` pobiera z progress callback
   - Komunikaty błędów dla użytkownika (NetworkError, DiskSpaceError, DownloadError)
+- **HTTP client** - Zmiana z urllib na httpx
+  - Lepsze wsparcie dla przekierowań GitHub
+  - Bardziej nowoczesne API
+  - Automatyczne follow_redirects
 
-### Testing (v2.0.0 WIP - Faza 2)
+### Testing (v2.0.0 - Faza 2 COMPLETED)
 - ✅ Wszystkie testy jednostkowe przechodzą (20/20, 100% pass rate)
-- ✅ Coverage: `src/setup/` - 62% (poniżej wymaganego 80%, wymaga rozbudowy)
-- ⚠️ **Testy integracyjne wymagają GitHub Release z binaries**
-- ⚠️ **Testy manualne wymagane przed produkcją v2.0.0 FREE**
+- ✅ Wszystkie testy integracyjne przechodzą (5/5, 100% pass rate)
+- ✅ GitHub Release deps-v1.0.0 utworzony i przetestowany
+- ✅ Pobieranie whisper-cli, ffmpeg i modelu small działa poprawnie
+- ✅ Weryfikacja checksums działa
+- ✅ Repo zmienione na publiczne dla FREE release
 
 ### Technical Details
 - Lokalizacja zależności: `~/Library/Application Support/Transrec/`
