@@ -7,14 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Planned Features
+### In Progress
 - **🚀 Dystrybucja Publiczna (v2.0.0 FREE)** - Szczegółowy plan w [`Docs/PUBLIC-DISTRIBUTION-PLAN.md`](Docs/PUBLIC-DISTRIBUTION-PLAN.md)
-  - Prosta instalacja drag & drop (DMG)
-  - Wsparcie dla dowolnego recordera/karty SD
-  - First-run wizard z automatycznym pobieraniem whisper.cpp
-  - Code signing & notaryzacja
+  - ✅ **Faza 1:** Uniwersalne źródła nagrań (testy integracyjne zakończone, testy manualne wymagane)
+  - 🚧 **Faza 2:** System pobierania whisper.cpp/modeli on-demand (WIP)
+  - [ ] **Faza 3:** First-run wizard z konfiguracją
+  - [ ] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller)
+  - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
+  - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
+  - [ ] **Faza 7:** GUI Settings & polish
+  - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
+
+### Planned Features
 - **🔒 PRO Features (v2.1.0)** - AI summaries, auto-tagging, cloud sync
 - See `BACKLOG.md` for other upcoming features and improvements
+
+---
+
+## [Unreleased] - Faza 2 COMPLETED ✅
+
+### Added (v2.0.0 - Faza 2 COMPLETED)
+- **Moduł pobierania zależności** (`src/setup/downloader.py`)
+  - Klasa `DependencyDownloader` z automatycznym pobieraniem whisper.cpp i ffmpeg
+  - Weryfikacja checksum SHA256 dla bezpieczeństwa
+  - Retry logic z exponential backoff (max 3 próby)
+  - Resume download dla przerwanych pobierań (Range header)
+  - Progress callback dla UI
+  - Obsługa błędów: brak internetu, brak miejsca, timeout, serwer niedostępny
+- **Custom exceptions** (`src/setup/errors.py`)
+  - `DownloadError`, `ChecksumError`, `NetworkError`, `DiskSpaceError`
+- **Konfiguracja checksums** (`src/setup/checksums.py`)
+  - Słowniki: `VERSIONS`, `CHECKSUMS`, `URLS`, `SIZES`
+- **Testy jednostkowe** (`tests/test_downloader.py`)
+  - 20 testów pokrywających wszystkie scenariusze (100% pass)
+  - Testy P0: sprawdzanie, checksum, network, disk space
+  - Testy P1: pobieranie, retry, progress callback
+  - Testy P2: resume download, cleanup temp files
+- **Testy integracyjne** (`tests/test_downloader_integration.py`)
+  - Podstawowa struktura (do rozbudowy po utworzeniu GitHub Release)
+
+### Changed (v2.0.0 - Faza 2 COMPLETED)
+- **src/config.py** - Nowa lokalizacja zależności
+  - `WHISPER_CPP_PATH` domyślnie: `~/Library/Application Support/Transrec/bin/whisper-cli`
+  - `WHISPER_CPP_MODELS_DIR` domyślnie: `~/Library/Application Support/Transrec/models/`
+  - Dodano `FFMPEG_PATH` dla bundlowanego ffmpeg
+  - Backward compatibility z `~/whisper.cpp/` dla developerów
+- **src/transcriber.py** - Zmiana `_check_whisper()`
+  - Zamiast błędu - warning i zwrócenie False (UI pokazuje ekran pobierania)
+  - Sprawdzanie nowej lokalizacji przed fallback do starej
+- **src/menu_app.py** - Integracja z downloaderem
+  - Metoda `_check_dependencies()` sprawdza zależności przy starcie (z opóźnieniem dla GUI)
+  - Metoda `_download_dependencies()` pobiera z progress callback
+  - Komunikaty błędów dla użytkownika (NetworkError, DiskSpaceError, DownloadError)
+  - Usunięto debug.log zapisy (11 miejsc)
+  - Zoptymalizowano progress callback (100x mniej wywołań)
+- **src/setup/downloader.py** - Weryfikacja checksum i auto-repair
+  - `check_all()` weryfikuje checksum dla wszystkich plików
+  - `download_whisper()`, `download_ffmpeg()`, `download_model()` auto-repair przy błędnym checksum
+  - Zoptymalizowano progress callback (tylko przy zmianie procentu, nie co 8KB)
+- **HTTP client** - Zmiana z urllib na httpx
+  - Lepsze wsparcie dla przekierowań GitHub
+  - Bardziej nowoczesne API
+  - Automatyczne follow_redirects
+
+### Testing (v2.0.0 - Faza 2 COMPLETED)
+- ✅ Wszystkie testy jednostkowe przechodzą (20/20, 100% pass rate)
+- ✅ Wszystkie testy integracyjne przechodzą (5/5, 100% pass rate)
+- ✅ GitHub Release deps-v1.0.0 utworzony i przetestowany
+- ✅ Pobieranie whisper-cli, ffmpeg i modelu small działa poprawnie
+- ✅ Weryfikacja checksums działa
+- ✅ Repo zmienione na publiczne dla FREE release
+- ✅ **Testy manualne Fazy 2 zakończone** (2025-12-26)
+  - ✅ TEST M1: Pierwsze uruchomienie - wszystkie zależności pobrane
+  - ✅ TEST M2: Brak internetu - komunikat błędu działa poprawnie
+  - ✅ TEST M3: Resume download - wznawianie pobierania działa
+  - ✅ TEST M5: Uszkodzony plik - wykrycie i auto-repair działa
+  - ⏳ TEST M4: Brak miejsca na dysku (opcjonalny, pominięty)
+  - ⏳ TEST M6: Wolne połączenie (opcjonalny, pominięty)
+
+### Technical Details
+- Lokalizacja zależności: `~/Library/Application Support/Transrec/`
+  - `bin/whisper-cli` (~10MB)
+  - `bin/ffmpeg` (~15MB)
+  - `models/ggml-small.bin` (~466MB)
+- Timeouty: CHUNK_TIMEOUT=30s, TOTAL_TIMEOUT=1800s (30min)
+- Max retries: 3 próby z exponential backoff
+- Minimalne miejsce na dysku: 500MB
+
+---
 
 ---
 

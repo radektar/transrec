@@ -197,35 +197,45 @@ class Transcriber:
         """
         # Check for whisper.cpp binary
         if not config.WHISPER_CPP_PATH.exists():
-            logger.error(
+            logger.warning(
                 f"⚠️  whisper.cpp not found at: {config.WHISPER_CPP_PATH}\n"
-                "Please run: bash scripts/install_whisper_cpp.sh"
+                "Aplikacja spróbuje pobrać zależności automatycznie przy "
+                "pierwszym uruchomieniu."
             )
-            return False
+            # Nie zwracamy False - pozwalamy aplikacji sprawdzić czy może pobrać
+            # (UI powinno pokazać ekran pobierania)
         
         # Check for ffmpeg
-        ffmpeg_path = shutil.which("ffmpeg")
-        if not ffmpeg_path:
-            logger.error(
-                "⚠️  ffmpeg not found. whisper.cpp requires ffmpeg to process audio. "
-                "Please install: brew install ffmpeg"
+        ffmpeg_path = config.FFMPEG_PATH
+        if not ffmpeg_path or not ffmpeg_path.exists():
+            # Fallback do systemowego ffmpeg
+            system_ffmpeg = shutil.which("ffmpeg")
+            if system_ffmpeg:
+                ffmpeg_path = Path(system_ffmpeg)
+            else:
+                logger.warning(
+                    "⚠️  ffmpeg not found. Aplikacja spróbuje pobrać automatycznie."
+                )
+                # Nie zwracamy False - pozwalamy aplikacji sprawdzić czy może pobrać
+        
+        if config.WHISPER_CPP_PATH.exists() and ffmpeg_path and ffmpeg_path.exists():
+            logger.info(f"✓ Found whisper.cpp at: {config.WHISPER_CPP_PATH}")
+            logger.info(f"✓ Found ffmpeg at: {ffmpeg_path}")
+            
+            # Check for Core ML model (Apple Silicon optimization)
+            coreml_model = (
+                config.WHISPER_CPP_MODELS_DIR / 
+                f"ggml-{config.WHISPER_MODEL}-encoder.mlmodelc"
             )
-            return False
+            if coreml_model.exists():
+                logger.info("✓ Core ML model found - GPU acceleration enabled")
+            else:
+                logger.info("ℹ️  Core ML model not found - using CPU (still fast)")
+            
+            return True
         
-        logger.info(f"✓ Found whisper.cpp at: {config.WHISPER_CPP_PATH}")
-        logger.info(f"✓ Found ffmpeg at: {ffmpeg_path}")
-        
-        # Check for Core ML model (Apple Silicon optimization)
-        coreml_model = (
-            config.WHISPER_CPP_MODELS_DIR / 
-            f"ggml-{config.WHISPER_MODEL}-encoder.mlmodelc"
-        )
-        if coreml_model.exists():
-            logger.info("✓ Core ML model found - GPU acceleration enabled")
-        else:
-            logger.info("ℹ️  Core ML model not found - using CPU (still fast)")
-        
-        return True
+        # Zależności brakują - zwróć False (UI powinno pokazać ekran pobierania)
+        return False
     
     def find_recorder(self) -> Optional[Path]:
         """Search for connected Olympus recorder.

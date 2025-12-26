@@ -1,6 +1,7 @@
 """Configuration module for Olympus Transcriber."""
 
 import os
+import shutil
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Optional
@@ -54,6 +55,7 @@ class Config:
     WHISPER_DEVICE: str = "cpu"  # Use CPU (whisper.cpp handles Core ML acceleration)
     WHISPER_CPP_PATH: Path = None  # Path to whisper.cpp binary
     WHISPER_CPP_MODELS_DIR: Path = None  # Path to whisper.cpp models directory
+    FFMPEG_PATH: Path = None  # Path to ffmpeg binary (Faza 2)
     
     # Timeouts and intervals (seconds)
     TRANSCRIPTION_TIMEOUT: int = 3600  # 60 minutes (increased from 30)
@@ -139,20 +141,62 @@ tags: [{tags}]
             self.AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".wma"}
         
         if self.WHISPER_CPP_PATH is None:
-            # Check for common whisper.cpp executable locations
-            whisper_base = Path.home() / "whisper.cpp"
-            if (whisper_base / "build" / "bin" / "whisper-cli").exists():
-                self.WHISPER_CPP_PATH = whisper_base / "build" / "bin" / "whisper-cli"
-            elif (whisper_base / "build" / "bin" / "main").exists():
-                self.WHISPER_CPP_PATH = whisper_base / "build" / "bin" / "main"
-            elif (whisper_base / "main").exists():
-                self.WHISPER_CPP_PATH = whisper_base / "main"
+            # Nowa lokalizacja: ~/Library/Application Support/Transrec/bin/
+            support_dir = (
+                Path.home() / "Library" / "Application Support" / "Transrec"
+            )
+            new_whisper_path = support_dir / "bin" / "whisper-cli"
+            
+            # Sprawdź nową lokalizację (Faza 2)
+            if new_whisper_path.exists():
+                self.WHISPER_CPP_PATH = new_whisper_path
             else:
-                # Default fallback (will be checked at runtime)
-                self.WHISPER_CPP_PATH = whisper_base / "build" / "bin" / "whisper-cli"
+                # Fallback do starych lokalizacji (backward compatibility)
+                whisper_base = Path.home() / "whisper.cpp"
+                if (whisper_base / "build" / "bin" / "whisper-cli").exists():
+                    self.WHISPER_CPP_PATH = (
+                        whisper_base / "build" / "bin" / "whisper-cli"
+                    )
+                elif (whisper_base / "build" / "bin" / "main").exists():
+                    self.WHISPER_CPP_PATH = whisper_base / "build" / "bin" / "main"
+                elif (whisper_base / "main").exists():
+                    self.WHISPER_CPP_PATH = whisper_base / "main"
+                else:
+                    # Default - nowa lokalizacja (będzie pobrana przez downloader)
+                    self.WHISPER_CPP_PATH = new_whisper_path
         
         if self.WHISPER_CPP_MODELS_DIR is None:
-            self.WHISPER_CPP_MODELS_DIR = Path.home() / "whisper.cpp" / "models"
+            # Nowa lokalizacja: ~/Library/Application Support/Transrec/models/
+            support_dir = (
+                Path.home() / "Library" / "Application Support" / "Transrec"
+            )
+            new_models_dir = support_dir / "models"
+            
+            # Sprawdź nową lokalizację
+            if new_models_dir.exists():
+                self.WHISPER_CPP_MODELS_DIR = new_models_dir
+            else:
+                # Fallback do starej lokalizacji
+                self.WHISPER_CPP_MODELS_DIR = Path.home() / "whisper.cpp" / "models"
+        
+        if self.FFMPEG_PATH is None:
+            # Nowa lokalizacja: ~/Library/Application Support/Transrec/bin/ffmpeg
+            support_dir = (
+                Path.home() / "Library" / "Application Support" / "Transrec"
+            )
+            new_ffmpeg_path = support_dir / "bin" / "ffmpeg"
+            
+            # Sprawdź nową lokalizację (Faza 2)
+            if new_ffmpeg_path.exists():
+                self.FFMPEG_PATH = new_ffmpeg_path
+            else:
+                # Fallback do systemowego ffmpeg (shutil.which)
+                system_ffmpeg = shutil.which("ffmpeg")
+                if system_ffmpeg:
+                    self.FFMPEG_PATH = Path(system_ffmpeg)
+                else:
+                    # Default - nowa lokalizacja (będzie pobrana przez downloader)
+                    self.FFMPEG_PATH = new_ffmpeg_path
         
         # Load LLM API key from environment
         if self.LLM_API_KEY is None:
