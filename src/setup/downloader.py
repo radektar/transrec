@@ -7,8 +7,8 @@ import socket
 import time
 from pathlib import Path
 from typing import Callable, Optional
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+import httpx
 
 from src.logger import logger
 from src.setup.checksums import CHECKSUMS, SIZES, URLS
@@ -222,22 +222,30 @@ class DependencyDownloader:
                     f"Pobieranie {name} (próba {attempt}/{MAX_RETRIES})..."
                 )
 
-                # Przygotuj request z Range header jeśli resume
-                req = Request(url)
-                req.add_header("User-Agent", "Transrec/2.0.0 (macOS; ARM64)")
+                # Przygotuj headers
+                headers = {"User-Agent": "Transrec/2.0.0 (macOS; ARM64)"}
                 if resume_from > 0:
-                    req.add_header("Range", f"bytes={resume_from}-")
+                    headers["Range"] = f"bytes={resume_from}-"
                     logger.info(f"Wznawianie pobierania od bajtu {resume_from}")
 
-                # Pobierz plik
-                with urlopen(req, timeout=CHUNK_TIMEOUT) as response:
+                # Pobierz plik przez httpx (z automatycznym follow redirects)
+                with httpx.stream(
+                    "GET",
+                    url,
+                    headers=headers,
+                    timeout=CHUNK_TIMEOUT,
+                    follow_redirects=True,
+                ) as response:
                     # Sprawdź kod odpowiedzi
-                    if response.status == 416:  # Range Not Satisfiable
+                    if response.status_code == 416:  # Range Not Satisfiable
                         # Plik już kompletny, usuń .tmp i sprawdź
                         if temp_path.exists():
                             temp_path.unlink()
                         resume_from = 0
                         continue
+
+                    # Sprawdź czy sukces
+                    response.raise_for_status()
 
                     # Otwórz plik w trybie append jeśli resume
                     mode = "ab" if resume_from > 0 else "wb"
@@ -249,11 +257,7 @@ class DependencyDownloader:
                         downloaded = resume_from
 
                         # Pobierz w chunkach
-                        while True:
-                            chunk = response.read(8192)
-                            if not chunk:
-                                break
-
+                        for chunk in response.iter_bytes(chunk_size=8192):
                             f.write(chunk)
                             downloaded += len(chunk)
 
@@ -278,19 +282,21 @@ class DependencyDownloader:
                 logger.info(f"✓ Pobrano {name}")
                 return
 
-            except HTTPError as e:
-                if e.code >= 500 and attempt < MAX_RETRIES:
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500 and attempt < MAX_RETRIES:
                     # Serwer niedostępny, retry z backoff
                     wait_time = 2 ** (attempt - 1)
                     logger.warning(
-                        f"Serwer niedostępny ({e.code}), "
+                        f"Serwer niedostępny ({e.response.status_code}), "
                         f"retry za {wait_time}s..."
                     )
                     time.sleep(wait_time)
                     continue
-                raise DownloadError(f"Błąd HTTP {e.code}: {e.reason}")
+                raise DownloadError(
+                    f"Błąd HTTP {e.response.status_code}: {e.response.reason_phrase}"
+                )
 
-            except URLError as e:
+            except (httpx.NetworkError, httpx.ConnectError) as e:
                 if attempt < MAX_RETRIES:
                     wait_time = 2 ** (attempt - 1)
                     logger.warning(
@@ -298,9 +304,9 @@ class DependencyDownloader:
                     )
                     time.sleep(wait_time)
                     continue
-                raise NetworkError(f"Błąd połączenia: {e.reason}")
+                raise NetworkError(f"Błąd połączenia: {e}")
 
-            except (TimeoutError, socket.timeout):
+            except (httpx.TimeoutException, TimeoutError):
                 if attempt < MAX_RETRIES:
                     logger.warning(f"Timeout, retry {attempt + 1}/{MAX_RETRIES}")
                     continue
