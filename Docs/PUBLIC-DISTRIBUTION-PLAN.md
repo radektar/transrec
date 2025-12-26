@@ -14,14 +14,15 @@
 2. [Decyzje strategiczne](#2-decyzje-strategiczne)
 3. [Architektura docelowa](#3-architektura-docelowa)
 4. [Plan implementacji - Fazy](#4-plan-implementacji---fazy)
-5. [Szczegóły techniczne](#5-szczegóły-techniczne)
-6. [Harmonogram i kamienie milowe](#6-harmonogram-i-kamienie-milowe)
-7. [Ryzyka i mitygacja](#7-ryzyka-i-mitygacja)
-8. [Koszty](#8-koszty)
-9. [Kryteria sukcesu](#9-kryteria-sukcesu)
-10. [Strategia Git i repozytoria](#10-strategia-git-i-repozytoria)
-11. [Następne kroki](#11-następne-kroki)
-12. [Podsumowanie modelu Freemium](#12-podsumowanie-modelu-freemium)
+5. [Strategia testowania](#5-strategia-testowania)
+6. [Szczegóły techniczne](#6-szczegóły-techniczne)
+7. [Harmonogram i kamienie milowe](#7-harmonogram-i-kamienie-milowe)
+8. [Ryzyka i mitygacja](#8-ryzyka-i-mitygacja)
+9. [Koszty](#9-koszty)
+10. [Kryteria sukcesu](#10-kryteria-sukcesu)
+11. [Strategia Git i repozytoria](#11-strategia-git-i-repozytoria)
+12. [Następne kroki](#12-następne-kroki)
+13. [Podsumowanie modelu Freemium](#13-podsumowanie-modelu-freemium)
 
 ---
 
@@ -1591,7 +1592,367 @@ export async function handleSummarize(request: Request, env: Env) {
 
 ---
 
-## 5. Szczegóły techniczne
+## 5. Strategia testowania
+
+### 5.1. Poziomy testów
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PIRAMIDA TESTÓW                               │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│                         ▲                                        │
+│                        /█\     E2E Tests (Manual)                │
+│                       /███\    - Pełny flow użytkownika          │
+│                      /█████\   - Beta testing                    │
+│                     ─────────                                    │
+│                    /█████████\  Integration Tests                │
+│                   /███████████\ - Workflow między modułami       │
+│                  /█████████████\ - API endpoints                 │
+│                 ───────────────                                  │
+│                /█████████████████\  Unit Tests (pytest)          │
+│               /███████████████████\ - Każda funkcja/klasa        │
+│              /█████████████████████\ - Mockowanie zależności     │
+│             ─────────────────────────                            │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 5.2. Testy per faza
+
+#### FAZA 1: Uniwersalne źródła nagrań
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Unit** | `UserSettings` dataclass | `tests/test_settings.py` | Load/save działa, migracja ze starej konfiguracji |
+| **Unit** | `_should_process_volume()` | `tests/test_file_monitor.py` | Poprawne wykrywanie audio na różnych volumenach |
+| **Unit** | `_has_audio_files()` | `tests/test_file_monitor.py` | Wykrywa .mp3, .wav, .m4a, .flac; ignoruje systemowe |
+| **Integration** | Watch mode "auto" | `tests/test_integration.py` | Automatyczne wykrycie USB z audio |
+| **Integration** | Watch mode "specific" | `tests/test_integration.py` | Tylko wybrane volumeny |
+| **Manual** | Różne recordery | - | Test z Olympus, Zoom, SD card, pendrive |
+
+**Checklist przed zakończeniem Fazy 1:**
+- [x] `pytest tests/test_settings.py` - 100% pass ✅
+- [x] `pytest tests/test_file_monitor.py` - 100% pass ✅
+- [x] `pytest tests/test_file_monitor_integration.py` - 100% pass (11/11) ✅
+- [ ] Test manualny: wykrycie 3 różnych urządzeń USB z audio ⚠️ *Wymagane przed produkcją*
+- [ ] Test manualny: ignorowanie pendrive bez plików audio ⚠️ *Wymagane przed produkcją*
+
+**Status:** Testy automatyczne zakończone. Testy manualne na fizycznych urządzeniach są niezbędne przed wydaniem v2.0.0 FREE, aby zweryfikować rzeczywiste zachowanie FSEvents i kompatybilność z różnymi systemami plików.
+
+---
+
+#### FAZA 2: System pobierania zależności
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Unit** | `DependencyDownloader` | `tests/test_downloader.py` | Poprawne URL-e, checksum verification |
+| **Unit** | `is_whisper_installed()` | `tests/test_downloader.py` | Poprawne wykrywanie zainstalowanego whisper |
+| **Unit** | `is_model_installed()` | `tests/test_downloader.py` | Poprawne wykrywanie modelu |
+| **Integration** | Download whisper.cpp | `tests/test_downloader_integration.py` | Pobiera z GitHub, weryfikuje checksum |
+| **Integration** | Download model | `tests/test_downloader_integration.py` | Pobiera z HuggingFace, ~466MB |
+| **Manual** | Progress callback | - | UI pokazuje postęp pobierania |
+| **Manual** | Offline mode | - | Graceful error gdy brak internetu |
+
+**Checklist przed zakończeniem Fazy 2:**
+- [ ] `pytest tests/test_downloader.py` - 100% pass
+- [ ] Test integracyjny pobierania (może być slow, ~5min)
+- [ ] Test manualny: przerwanie pobierania i wznowienie
+- [ ] Test manualny: brak internetu → komunikat błędu
+
+---
+
+#### FAZA 3: First-Run Wizard
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Unit** | `SetupWizard` flow | `tests/test_wizard.py` | Poprawna kolejność kroków |
+| **Unit** | `check_full_disk_access()` | `tests/test_permissions.py` | Wykrywa brak/obecność FDA |
+| **Unit** | `WizardStep` enum | `tests/test_wizard.py` | Wszystkie kroki zdefiniowane |
+| **Integration** | Wizard + Downloader | `tests/test_wizard_integration.py` | Wizard triggeruje pobieranie |
+| **Manual** | Kompletny przepływ | - | Od Welcome do Finish bez błędów |
+| **Manual** | Cancel/Back | - | Można cofać i anulować |
+| **Manual** | FDA instrukcje | - | Link do System Preferences działa |
+
+**Checklist przed zakończeniem Fazy 3:**
+- [ ] `pytest tests/test_wizard.py` - 100% pass
+- [ ] `pytest tests/test_permissions.py` - 100% pass
+- [ ] Test manualny: pełny wizard na czystym systemie (<5 min)
+- [ ] Test manualny: wizard z już pobranym whisper (skip download)
+
+---
+
+#### FAZA 4: Pakowanie py2app
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Build** | py2app build | `scripts/build_app.sh` | Build kończy się bez błędów |
+| **Build** | App size | - | <20MB (bez modeli) |
+| **Manual** | Launch .app | - | Aplikacja uruchamia się |
+| **Manual** | Menu bar | - | Ikona pojawia się w pasku menu |
+| **Manual** | All features | - | Transkrypcja działa z .app |
+| **Manual** | Clean system | - | Działa na macOS bez Python |
+
+**Checklist przed zakończeniem Fazy 4:**
+- [ ] Build script kończy się sukcesem
+- [ ] `.app` uruchamia się bez błędów
+- [ ] `.app` rozmiar <20MB
+- [ ] Test na czystym macOS (VM lub inny Mac)
+- [ ] Wszystkie funkcje działają z bundled app
+
+---
+
+#### FAZA 5: Code Signing & Notaryzacja
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Script** | Sign script | `scripts/sign_and_notarize.sh` | Podpisuje bez błędów |
+| **Verify** | Signature | `codesign --verify` | Valid signature |
+| **Verify** | Notarization | `xcrun stapler validate` | Stapled ticket valid |
+| **Manual** | Gatekeeper | - | Brak ostrzeżeń przy uruchomieniu |
+| **Manual** | Other Mac | - | Działa na Macu bez dev tools |
+
+**Checklist przed zakończeniem Fazy 5:**
+- [ ] `codesign --verify --deep --strict dist/Transrec.app` → valid
+- [ ] `spctl --assess --type exec dist/Transrec.app` → accepted
+- [ ] Test na innym Macu: brak "unidentified developer"
+- [ ] Test pierwszego uruchomienia: brak bloków Gatekeeper
+
+---
+
+#### FAZA 6: DMG & Release
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Build** | DMG creation | `scripts/create_dmg.sh` | DMG tworzy się poprawnie |
+| **Verify** | DMG signature | `codesign --verify` | DMG podpisany |
+| **Manual** | Drag & drop | - | Instalacja przez przeciągnięcie |
+| **Manual** | GitHub Release | - | Release widoczny, download działa |
+| **E2E** | Fresh install | - | Od pobrania do działającej transkrypcji |
+
+**Checklist przed zakończeniem Fazy 6:**
+- [ ] DMG tworzy się bez błędów
+- [ ] DMG otwiera się i pokazuje app + Applications link
+- [ ] Drag & drop do Applications działa
+- [ ] GitHub Release utworzony z release notes
+- [ ] Download link działa
+
+---
+
+#### FAZA 7: GUI Settings & Polish
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Unit** | `SettingsWindow` | `tests/test_settings_ui.py` | Okno otwiera się, zapisuje |
+| **Manual** | Wszystkie opcje | - | Każda opcja działa |
+| **Manual** | Update check | - | Sprawdza GitHub API |
+| **Manual** | About window | - | Pokazuje wersję, linki |
+| **UX** | Użytkownik nietechniczny | - | Zrozumiałe bez dokumentacji |
+
+**Checklist przed zakończeniem Fazy 7:**
+- [ ] Wszystkie opcje Settings działają
+- [ ] Zmiany persistują po restarcie
+- [ ] "Check for updates" wykrywa nową wersję
+- [ ] UX review: test z osobą nietechniczną
+
+---
+
+#### FAZA 8: Infrastruktura Freemium
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Unit** | `FeatureFlags` | `tests/test_features.py` | FREE vs PRO flags poprawne |
+| **Unit** | `LicenseManager` | `tests/test_license.py` | Verify, activate, cache |
+| **Unit** | PRO gate w summarizer | `tests/test_summarizer.py` | Blokuje bez licencji |
+| **Unit** | PRO gate w tagger | `tests/test_tagger.py` | Blokuje bez licencji |
+| **Integration** | Offline mode | `tests/test_license_offline.py` | Cache działa 7 dni |
+| **Manual** | PRO activation UI | - | Dialog aktywacji |
+| **Manual** | "Upgrade to PRO" | - | Link do zakupu |
+
+**Checklist przed zakończeniem Fazy 8:**
+- [ ] `pytest tests/test_features.py` - 100% pass
+- [ ] `pytest tests/test_license.py` - 100% pass
+- [ ] FREE: transkrypcja działa, AI disabled
+- [ ] Symulacja: aktywacja PRO → AI enabled
+- [ ] Symulacja: offline → cache działa
+
+---
+
+#### FAZA 9: Backend PRO (opcjonalna)
+
+| Typ testu | Zakres | Plik testowy | Kryteria akceptacji |
+|-----------|--------|--------------|---------------------|
+| **Unit** | License validation | `backend/tests/license.test.ts` | LemonSqueezy integration |
+| **Unit** | Summarize endpoint | `backend/tests/summarize.test.ts` | Claude API call |
+| **Unit** | Tags endpoint | `backend/tests/tags.test.ts` | Generuje tagi |
+| **Integration** | App → Backend | `tests/test_pro_integration.py` | End-to-end PRO flow |
+| **Load** | Rate limiting | - | 100 req/min per user |
+| **Security** | Auth | - | Invalid key → 403 |
+
+**Checklist przed zakończeniem Fazy 9:**
+- [ ] Backend unit tests pass
+- [ ] App → Backend integration działa
+- [ ] Płatność LemonSqueezy → licencja aktywna
+- [ ] Rate limiting działa
+- [ ] Security audit: brak wycieku kluczy
+
+---
+
+### 5.3. Strategia beta testingu
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    BETA TESTING TIMELINE                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  TYDZIEŃ 4                                                       │
+│  ├─ Alpha (internal)                                             │
+│  │  └─ 1-2 osoby z zespołu                                       │
+│  │  └─ Focus: critical bugs, crashes                             │
+│  │                                                               │
+│  TYDZIEŃ 5                                                       │
+│  ├─ Beta (external)                                              │
+│  │  └─ 5-10 osób (znajomi, early adopters)                       │
+│  │  └─ Focus: UX, edge cases, różne recordery                    │
+│  │  └─ Feedback form (Google Forms)                              │
+│  │                                                               │
+│  ├─ RC (Release Candidate)                                       │
+│  │  └─ Ostatnie poprawki                                         │
+│  │  └─ Freeze features                                           │
+│  │  └─ Only critical bugfixes                                    │
+│  │                                                               │
+│  RELEASE v2.0.0                                                  │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Beta feedback form
+
+Pytania dla beta testerów:
+1. Na jakim macOS testujesz? (wersja)
+2. Jaki recorder/kartę SD używasz?
+3. Czy instalacja przebiegła bez problemów? (1-5)
+4. Czy wizard był zrozumiały? (1-5)
+5. Czy transkrypcja działa poprawnie? (Tak/Nie)
+6. Ile czasu zajęła transkrypcja 5-min nagrania?
+7. Czy wystąpiły jakieś błędy? (opisz)
+8. Co byś zmienił/poprawił?
+
+### 5.4. Test environment matrix
+
+| macOS | Status | Priorytet | Uwagi |
+|-------|--------|-----------|-------|
+| 15 (Sequoia) | ✅ Required | P0 | Primary target |
+| 14 (Sonoma) | ✅ Required | P0 | Most common |
+| 13 (Ventura) | ✅ Required | P1 | Still supported |
+| 12 (Monterey) | ⚠️ Optional | P2 | Minimum supported |
+| <12 | ❌ Not supported | - | Too old |
+
+| Architektura | Status | Uwagi |
+|--------------|--------|-------|
+| Apple Silicon (M1/M2/M3/M4) | ✅ Required | Primary target |
+| Intel x86_64 | ❌ Not supported | Use source code |
+
+| Urządzenia do testów |
+|---------------------|
+| Olympus LS-P1 |
+| Zoom H1/H6 |
+| Generic SD card |
+| USB flash drive z audio |
+| iPhone (jako recorder) |
+
+### 5.5. Automatyzacja testów (CI/CD)
+
+```yaml
+# .github/workflows/tests.yml
+name: Tests
+
+on:
+  push:
+    branches: [main, develop, feature/*]
+  pull_request:
+    branches: [develop]
+
+jobs:
+  unit-tests:
+    runs-on: macos-14  # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      
+      - name: Run unit tests
+        run: pytest tests/ -v --cov=src --cov-report=xml
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+
+  build-test:
+    runs-on: macos-14
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build app
+        run: |
+          pip install py2app
+          python setup_app.py py2app
+      
+      - name: Verify build
+        run: |
+          test -d dist/Transrec.app
+          du -sh dist/Transrec.app
+```
+
+### 5.6. Kryteria akceptacji release
+
+#### v2.0.0 FREE - Definition of Done
+
+| Kategoria | Kryterium | Status |
+|-----------|-----------|--------|
+| **Unit Tests** | 100% pass, >80% coverage | [ ] |
+| **Integration** | Wszystkie scenariusze pass | [ ] |
+| **Build** | .app buduje się bez błędów | [ ] |
+| **Signing** | Notaryzacja przeszła | [ ] |
+| **Beta** | <5 critical bugs, all fixed | [ ] |
+| **Performance** | <3s startup, <30s/min transcription | [ ] |
+| **UX** | 5/5 beta testerów: "łatwa instalacja" | [ ] |
+| **Docs** | README, QUICKSTART aktualne | [ ] |
+
+#### v2.1.0 PRO - Definition of Done
+
+| Kategoria | Kryterium | Status |
+|-----------|-----------|--------|
+| **Backend** | All endpoints working | [ ] |
+| **Payments** | LemonSqueezy integration | [ ] |
+| **License** | Activation works | [ ] |
+| **AI Features** | Summaries, tags working | [ ] |
+| **Security** | No API key leaks | [ ] |
+
+### 5.7. Bug tracking
+
+**GitHub Issues labels:**
+- `bug` - Błąd do naprawy
+- `bug-critical` - Blokuje release
+- `bug-minor` - Można wydać z tym bugiem
+- `phase-X` - Dotyczy konkretnej fazy
+- `beta-feedback` - Z beta testingu
+
+**Bug triage:**
+- **P0 (Critical)**: Fix przed release, blokuje użytkownika
+- **P1 (High)**: Fix przed release jeśli możliwe
+- **P2 (Medium)**: Może być w następnej wersji
+- **P3 (Low)**: Nice to have
+
+---
+
+## 6. Szczegóły techniczne
 
 ### 5.1. Statyczny FFmpeg
 
@@ -1635,7 +1996,7 @@ make -j8
 
 ---
 
-## 6. Harmonogram i kamienie milowe
+## 7. Harmonogram i kamienie milowe
 
 ### 6.1. Faza FREE (v2.0.0) - 4-5 tygodni
 
@@ -1756,7 +2117,7 @@ T8  │             │                  │ ▓▓▓ Launch  │ ← RELEASE P
 
 ---
 
-## 7. Ryzyka i mitygacja
+## 8. Ryzyka i mitygacja
 
 ### 7.1. Ryzyka techniczne (FREE)
 
@@ -1782,7 +2143,7 @@ T8  │             │                  │ ▓▓▓ Launch  │ ← RELEASE P
 
 ---
 
-## 8. Koszty
+## 9. Koszty
 
 ### 8.1. Koszty wersji FREE
 
@@ -1818,7 +2179,7 @@ T8  │             │                  │ ▓▓▓ Launch  │ ← RELEASE P
 
 ---
 
-## 9. Kryteria sukcesu
+## 10. Kryteria sukcesu
 
 ### 9.1. Techniczne (FREE)
 
@@ -1852,7 +2213,7 @@ T8  │             │                  │ ▓▓▓ Launch  │ ← RELEASE P
 
 ---
 
-## 10. Strategia Git i repozytoria
+## 11. Strategia Git i repozytoria
 
 ### 10.1. Struktura repozytoriów
 
@@ -1957,7 +2318,7 @@ NIE: Oddzielne branche dla FREE/PRO
 
 ---
 
-## 11. Następne kroki
+## 12. Następne kroki
 
 ### Przed startem
 1. **TERAZ:** Zatwierdzenie planu
@@ -1983,7 +2344,7 @@ NIE: Oddzielne branche dla FREE/PRO
 
 ---
 
-## 12. Podsumowanie modelu Freemium
+## 13. Podsumowanie modelu Freemium
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

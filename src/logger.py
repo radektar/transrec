@@ -5,7 +5,14 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from src.config import config
+# Import config module directly (avoiding circular import with config package)
+import sys
+import importlib.util
+spec = importlib.util.spec_from_file_location("config_module", Path(__file__).parent / "config.py")
+config_module = importlib.util.module_from_spec(spec)
+sys.modules["config_module"] = config_module
+spec.loader.exec_module(config_module)
+config = config_module.config
 
 
 def setup_logger(

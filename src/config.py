@@ -1,23 +1,31 @@
-"""Configuration module for Olympus Transcriber."""
+"""Configuration module for Transrec (backward compatible wrapper)."""
 
 import os
 from pathlib import Path
 from dataclasses import dataclass
 from typing import List, Optional
 
+from src.config.settings import UserSettings
+from src.config.migration import perform_migration_if_needed
+from src.config.defaults import defaults
+
 
 @dataclass
 class Config:
-    """Central configuration for Olympus Transcriber application.
+    """Backward-compatible configuration wrapper for Transrec.
+    
+    This class maintains the old Config interface while using UserSettings
+    internally. This allows existing code to continue working while we
+    transition to the new configuration system.
     
     Attributes:
-        RECORDER_NAMES: List of possible volume names for the recorder
-        TRANSCRIBE_DIR: Directory where transcriptions are saved
-        STATE_FILE: JSON file tracking last sync time
+        RECORDER_NAMES: List of possible volume names (from watched_volumes or defaults)
+        TRANSCRIBE_DIR: Directory where transcriptions are saved (from output_dir)
+        STATE_FILE: JSON file tracking last sync time (legacy)
         LOG_DIR: Directory for application logs
         LOG_FILE: Path to main log file
-        WHISPER_MODEL: Whisper model size (tiny, base, small, medium, large)
-        WHISPER_LANGUAGE: Language code for transcription (pl, en, or None for auto)
+        WHISPER_MODEL: Whisper model size (from whisper_model)
+        WHISPER_LANGUAGE: Language code for transcription (from language)
         WHISPER_DEVICE: Device to use (cpu or auto-detect)
         WHISPER_CPP_PATH: Path to whisper.cpp binary executable
         WHISPER_CPP_MODELS_DIR: Directory containing whisper.cpp models
@@ -25,10 +33,10 @@ class Config:
         PERIODIC_CHECK_INTERVAL: Fallback check interval (seconds)
         MOUNT_MONITOR_DELAY: Wait time after mount detection (seconds)
         AUDIO_EXTENSIONS: Supported audio file formats
-        ENABLE_SUMMARIZATION: Whether to generate summaries using LLM
+        ENABLE_SUMMARIZATION: Whether to generate summaries using LLM (from enable_ai_summaries)
         LLM_PROVIDER: LLM provider name (claude, openai, ollama)
         LLM_MODEL: Model name for the selected provider
-        LLM_API_KEY: API key for LLM provider (from environment)
+        LLM_API_KEY: API key for LLM provider (from ai_api_key)
         SUMMARY_MAX_WORDS: Maximum words in generated summary
         TITLE_MAX_LENGTH: Maximum length for generated title (characters)
         DELETE_TEMP_TXT: Whether to delete temporary TXT files after MD creation
@@ -97,32 +105,31 @@ tags: [{tags}]
 """
     
     def __post_init__(self):
-        """Initialize default values after dataclass initialization."""
+        """Initialize default values after dataclass initialization.
+        
+        This method loads UserSettings and maps values to the old Config interface
+        for backward compatibility.
+        """
+        # Load user settings (with migration if needed)
+        self._user_settings = perform_migration_if_needed()
+        
+        # Map UserSettings to old Config attributes
         if self.RECORDER_NAMES is None:
-            self.RECORDER_NAMES = ["LS-P1", "OLYMPUS", "RECORDER"]
+            # Use watched_volumes if in specific mode, otherwise use defaults
+            if self._user_settings.watch_mode == "specific" and self._user_settings.watched_volumes:
+                self.RECORDER_NAMES = self._user_settings.watched_volumes
+            else:
+                # Legacy default for backward compatibility
+                self.RECORDER_NAMES = ["LS-P1", "OLYMPUS", "RECORDER"]
         
         if self.TRANSCRIBE_DIR is None:
-            # 1. Priority: environment variable (can be set differently on each Mac)
-            env_dir = os.getenv("OLYMPUS_TRANSCRIBE_DIR")
-            if env_dir:
-                self.TRANSCRIBE_DIR = Path(env_dir).expanduser().resolve()
-            else:
-                # 2. Fallback: standard Obsidian vault location in iCloud,
-                # based on user's home directory (Path.home())
-                self.TRANSCRIBE_DIR = (
-                    Path.home()
-                    / "Library"
-                    / "Mobile Documents"
-                    / "iCloud~md~obsidian"
-                    / "Documents"
-                    / "Obsidian"
-                    / "11-Transcripts"
-                ).resolve()
+            self.TRANSCRIBE_DIR = self._user_settings.output_dir
         
         if self.LOG_DIR is None:
             self.LOG_DIR = Path.home() / "Library" / "Logs"
         
         if self.STATE_FILE is None:
+            # Keep legacy state file path for backward compatibility
             self.STATE_FILE = Path.home() / ".olympus_transcriber_state.json"
         
         if self.LOG_FILE is None:
@@ -136,7 +143,12 @@ tags: [{tags}]
             self.PROCESS_LOCK_FILE = Path.home() / ".olympus_transcriber" / "transcriber.lock"
         
         if self.AUDIO_EXTENSIONS is None:
-            self.AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".wma"}
+            self.AUDIO_EXTENSIONS = defaults.AUDIO_EXTENSIONS
+        
+        # Map whisper settings from UserSettings
+        # Always use UserSettings values (they are the source of truth)
+        self.WHISPER_MODEL = self._user_settings.whisper_model
+        self.WHISPER_LANGUAGE = self._user_settings.language or "pl"
         
         if self.WHISPER_CPP_PATH is None:
             # Check for common whisper.cpp executable locations
@@ -154,21 +166,26 @@ tags: [{tags}]
         if self.WHISPER_CPP_MODELS_DIR is None:
             self.WHISPER_CPP_MODELS_DIR = Path.home() / "whisper.cpp" / "models"
         
-        # Load LLM API key from environment
+        # Map AI settings from UserSettings
+        self.ENABLE_SUMMARIZATION = self._user_settings.enable_ai_summaries
+        
+        # Load LLM API key from UserSettings or environment
         if self.LLM_API_KEY is None:
-            if self.LLM_PROVIDER == "claude":
-                self.LLM_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-            elif self.LLM_PROVIDER == "openai":
-                self.LLM_API_KEY = os.getenv("OPENAI_API_KEY")
-            elif self.LLM_PROVIDER == "ollama":
-                # Ollama doesn't require API key, but we can use base URL
-                self.LLM_API_KEY = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+            if self._user_settings.ai_api_key:
+                self.LLM_API_KEY = self._user_settings.ai_api_key
+            else:
+                # Fallback to environment for backward compatibility
+                if self.LLM_PROVIDER == "claude":
+                    self.LLM_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+                elif self.LLM_PROVIDER == "openai":
+                    self.LLM_API_KEY = os.getenv("OPENAI_API_KEY")
+                elif self.LLM_PROVIDER == "ollama":
+                    # Ollama doesn't require API key, but we can use base URL
+                    self.LLM_API_KEY = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         
         # Disable summarization if API key is missing (unless Ollama)
-        # Note: logger is imported lazily to avoid circular imports
         if self.ENABLE_SUMMARIZATION and self.LLM_PROVIDER != "ollama":
             if not self.LLM_API_KEY:
-                # Logger will be initialized later, just disable feature
                 self.ENABLE_SUMMARIZATION = False
 
         if self.ENABLE_LLM_TAGGING and not self.ENABLE_SUMMARIZATION:

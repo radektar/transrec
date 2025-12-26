@@ -106,6 +106,8 @@ Przy zmianach w:
 - **Konfiguracji** → aktualizuj API.md (config.py section)
 - **Workflow** → aktualizuj DEVELOPMENT.md
 - **Funkcjach użytkownika** → aktualizuj README.md
+- **Testach** → aktualizuj TESTING-GUIDE.md
+- **Fazach implementacji** → aktualizuj PUBLIC-DISTRIBUTION-PLAN.md (strategia testowania)
 
 ## Dokumenty zaktualizowane dla v2.0.0
 

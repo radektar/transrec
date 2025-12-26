@@ -1,0 +1,179 @@
+# Transrec Project Rules - Testing Requirements
+
+## Pre-Commit Testing Verification
+
+Przed każdym commitem MUSISZ sprawdzić zgodność z wymaganiami testowymi z `Docs/PUBLIC-DISTRIBUTION-PLAN.md`.
+
+### Wymagania testowe (z PUBLIC-DISTRIBUTION-PLAN.md)
+
+#### 1. Unit Tests - Wymagania podstawowe
+- ✅ **100% testów musi przechodzić** przed commitem
+- ✅ **Minimum 80% code coverage** dla nowych modułów
+- ✅ Każda nowa funkcja/klasa MUSI mieć odpowiednie testy jednostkowe
+- ✅ Wszystkie publiczne metody MUSZĄ być przetestowane
+
+#### 2. Mapowanie modułów → plików testowych
+
+Zgodnie z planem dystrybucji, nowe moduły MUSZĄ mieć odpowiednie testy:
+
+| Moduł | Plik testowy | Faza | Status wymagany |
+|-------|--------------|------|-----------------|
+| `src/config/settings.py` (UserSettings) | `tests/test_settings.py` | Faza 1 | ✅ Unit tests |
+| `src/core/file_monitor.py` (rozszerzenia) | `tests/test_file_monitor.py` | Faza 1 | ✅ Unit + Integration |
+| `src/setup/downloader.py` | `tests/test_downloader.py` | Faza 2 | ✅ Unit + Integration |
+| `src/setup/wizard.py` | `tests/test_wizard.py` | Faza 3 | ✅ Unit tests |
+| `src/setup/permissions.py` | `tests/test_permissions.py` | Faza 3 | ✅ Unit tests |
+| `src/config/features.py` | `tests/test_features.py` | Faza 8 | ✅ Unit tests |
+| `src/config/license.py` | `tests/test_license.py` | Faza 8 | ✅ Unit + Integration |
+| `src/core/summarizer.py` (PRO gate) | `tests/test_summarizer.py` | Faza 8 | ✅ Unit tests |
+| `src/core/tagger.py` (PRO gate) | `tests/test_tagger.py` | Faza 8 | ✅ Unit tests |
+
+#### 3. Checklist przed commitem
+
+Przed commitem MUSISZ wykonać:
+
+```bash
+# 1. Uruchom wszystkie testy jednostkowe
+pytest tests/ -v
+
+# 2. Sprawdź coverage dla zmienionych modułów
+pytest tests/ --cov=src --cov-report=term-missing
+
+# 3. Sprawdź czy nowe moduły mają testy
+# Jeśli dodałeś nowy moduł w src/, sprawdź czy istnieje odpowiedni test_*.py
+```
+
+#### 4. Reguły dla nowych modułów
+
+**Jeśli dodajesz nowy moduł w `src/`:**
+- ✅ MUSISZ utworzyć odpowiedni plik testowy w `tests/`
+- ✅ Nazwa pliku testowego: `test_<nazwa_modułu>.py`
+- ✅ Minimum 3 testy jednostkowe dla każdej klasy/funkcji publicznej
+- ✅ Testy MUSZĄ pokrywać happy path, error cases i edge cases
+
+**Jeśli modyfikujesz istniejący moduł:**
+- ✅ Sprawdź czy istniejące testy nadal przechodzą
+- ✅ Dodaj testy dla nowych funkcji/metod
+- ✅ Zaktualizuj testy jeśli zmieniłeś API
+
+#### 5. Weryfikacja zgodności z fazami
+
+Przed commitem sprawdź czy zmiany są zgodne z wymaganiami fazy:
+
+**FAZA 1 (Universal Sources):**
+- [ ] `tests/test_settings.py` - 100% pass
+- [ ] `tests/test_file_monitor.py` - 100% pass (z nowymi testami dla universal volumes)
+- [ ] Testy wykrywania audio na różnych volumenach
+
+**FAZA 2 (Dependency Downloader):**
+- [ ] `tests/test_downloader.py` - 100% pass
+- [ ] Testy checksum verification
+- [ ] Testy offline mode
+
+**FAZA 3 (First-Run Wizard):**
+- [ ] `tests/test_wizard.py` - 100% pass
+- [ ] `tests/test_permissions.py` - 100% pass
+- [ ] Testy flow wizarda
+
+**FAZA 8 (Freemium Infrastructure):**
+- [ ] `tests/test_features.py` - 100% pass
+- [ ] `tests/test_license.py` - 100% pass
+- [ ] Testy PRO gate w `tests/test_summarizer.py`
+- [ ] Testy PRO gate w `tests/test_tagger.py`
+
+#### 6. Coverage requirements
+
+- **Minimum 80% coverage** dla wszystkich modułów w `src/`
+- **100% coverage** dla krytycznych modułów:
+  - `src/config/settings.py`
+  - `src/config/license.py`
+  - `src/core/file_monitor.py`
+  - `src/setup/wizard.py`
+
+#### 7. Integration tests
+
+Dla modułów wymagających integracji (zgodnie z planem):
+- ✅ Utwórz plik `tests/test_<moduł>_integration.py`
+- ✅ Testy workflow między modułami
+- ✅ Testy z mockami zewnętrznych zależności
+
+#### 8. Testy manualne (dokumentacja)
+
+Dla funkcji wymagających testów manualnych (zgodnie z planem):
+- ✅ Dodaj komentarz w kodzie: `# TODO: Manual test required - see PUBLIC-DISTRIBUTION-PLAN.md Phase X`
+- ✅ Utwórz issue w GitHub z label `manual-test` jeśli wymagane
+
+#### 9. Automatyczna weryfikacja
+
+Przed commitem uruchom:
+
+```bash
+# Pełna weryfikacja
+make test  # jeśli istnieje w Makefile
+# LUB
+pytest tests/ -v --cov=src --cov-report=term-missing --cov-fail-under=80
+```
+
+#### 10. Wyjątki
+
+Testy mogą być pominięte TYLKO jeśli:
+- Zmiana dotyczy tylko dokumentacji (`.md` files)
+- Zmiana dotyczy tylko konfiguracji build (`setup.py`, `pyproject.toml`)
+- Hotfix krytyczny (wymaga explicite `[skip-tests]` w commit message + uzasadnienie)
+
+#### 11. Commit message requirements
+
+Commit message MUSI zawierać:
+- Wersję: `v2.0.0:` na początku
+- Informację o testach: `[tests: pass]` lub `[tests: skip - reason]`
+
+Przykład:
+```
+v2.0.0: Add UserSettings class for configuration [tests: pass]
+```
+
+#### 12. Sprawdzanie przed commitem - Automatyczne
+
+Przed commitem Cursor powinien automatycznie:
+1. Sprawdzić czy `pytest tests/ -v` przechodzi
+2. Sprawdzić coverage dla zmienionych plików
+3. Sprawdzić czy nowe moduły mają odpowiednie testy
+4. Sprawdzić czy testy są zgodne z wymaganiami fazy z PUBLIC-DISTRIBUTION-PLAN.md
+
+---
+
+## Dodatkowe zasady
+
+### Test structure
+- Używaj `pytest` jako framework testowy
+- Grupuj powiązane testy w klasach: `class TestModuleName:`
+- Używaj fixtures dla wspólnego setupu
+- Mockuj zewnętrzne zależności (API calls, file system, etc.)
+
+### Test naming
+- Pliki testowe: `test_<module_name>.py`
+- Funkcje testowe: `test_<function_name>_<scenario>`
+- Klasy testowe: `Test<ClassName>`
+
+### Coverage reporting
+- Uruchamiaj `pytest --cov=src --cov-report=html` przed commitem
+- Sprawdź `htmlcov/index.html` dla szczegółów coverage
+- Minimum 80% dla nowych modułów
+
+### Integration tests
+- Umieszczaj w `tests/test_<module>_integration.py`
+- Testuj workflow między modułami
+- Używaj mocków dla zewnętrznych API
+
+---
+
+## Referencje
+
+- Pełna strategia testowania: `Docs/PUBLIC-DISTRIBUTION-PLAN.md` sekcja 5
+- Przewodnik testowania: `Docs/TESTING-GUIDE.md`
+- Coding standards: workspace rules (zawsze_applied_workspace_rules)
+
+---
+
+**UWAGA:** Te reguły są wymagane dla wszystkich commitów. Nie commituj bez spełnienia wymagań testowych!
+

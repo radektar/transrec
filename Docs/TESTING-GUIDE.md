@@ -6,14 +6,46 @@
 > - [README.md](../README.md) - Przegląd projektu
 > - [DEVELOPMENT.md](DEVELOPMENT.md) - Przewodnik deweloperski
 > - [API.md](API.md) - Dokumentacja API modułów
+> - [PUBLIC-DISTRIBUTION-PLAN.md](PUBLIC-DISTRIBUTION-PLAN.md) - Strategia testowania per faza
 
 Comprehensive guide for testing Transrec.
 
 ## 📋 Test Types
 
-### 1. Unit Tests
-### 2. Integration Tests
-### 3. Manual Tests
+| Typ | Narzędzie | Kiedy uruchamiać |
+|-----|-----------|------------------|
+| **Unit Tests** | pytest | Każdy commit |
+| **Integration Tests** | pytest + fixtures | Przed merge do develop |
+| **E2E Tests** | Manual / scripts | Przed release |
+| **Beta Testing** | External users | Przed v2.0.0 release |
+
+---
+
+## 🎯 Testy v2.0.0 - Nowe moduły
+
+### Testy dla nowych funkcji
+
+| Moduł | Plik testowy | Status |
+|-------|--------------|--------|
+| `UserSettings` | `tests/test_settings.py` | 🆕 Do utworzenia |
+| `DependencyDownloader` | `tests/test_downloader.py` | 🆕 Do utworzenia |
+| `SetupWizard` | `tests/test_wizard.py` | 🆕 Do utworzenia |
+| `FeatureFlags` | `tests/test_features.py` | 🆕 Do utworzenia |
+| `LicenseManager` | `tests/test_license.py` | 🆕 Do utworzenia |
+| Universal volume detection | `tests/test_file_monitor.py` | 📝 Do rozszerzenia |
+
+### Uruchamianie testów v2.0.0
+
+```bash
+# Wszystkie nowe testy
+pytest tests/test_settings.py tests/test_downloader.py tests/test_wizard.py -v
+
+# Testy feature flags (freemium)
+pytest tests/test_features.py tests/test_license.py -v
+
+# Testy z coverage dla nowych modułów
+pytest tests/ --cov=src/config --cov=src/setup --cov-report=html
+```
 
 ---
 
@@ -611,6 +643,158 @@ ls -la ~/.olympus_transcriber_state.json
 ---
 
 For more troubleshooting, see `DEVELOPMENT.md` and application logs.
+
+---
+
+## 🚀 Testy v2.0.0 - E2E Scenarios
+
+### Scenario: Fresh Install (v2.0.0)
+
+**Cel:** Weryfikacja pełnego flow dla nowego użytkownika.
+
+**Setup:**
+- Czysty macOS (VM lub nowy użytkownik)
+- Brak poprzedniej instalacji Transrec
+- Brak whisper.cpp
+
+**Kroki:**
+1. Pobierz DMG z GitHub Releases
+2. Otwórz DMG, przeciągnij Transrec.app do Applications
+3. Uruchom Transrec.app
+4. Przejdź przez First-Run Wizard
+5. Poczekaj na pobranie whisper.cpp + model
+6. Nadaj Full Disk Access
+7. Podłącz recorder z plikami audio
+8. Poczekaj na transkrypcję
+
+**Expected:**
+- [ ] DMG otwiera się bez ostrzeżeń Gatekeeper
+- [ ] Wizard uruchamia się automatycznie
+- [ ] Pobieranie pokazuje progress bar
+- [ ] Instrukcje FDA są jasne
+- [ ] Recorder wykrywany automatycznie
+- [ ] Transkrypcja działa poprawnie
+- [ ] Plik .md utworzony w output dir
+
+**Czas:** ~10-15 minut (z pobieraniem modelu)
+
+---
+
+### Scenario: Universal Volume Detection (v2.0.0)
+
+**Cel:** Weryfikacja wykrywania różnych urządzeń.
+
+> 📖 **Szczegółowy przewodnik:** Zobacz [MANUAL_TESTING_PHASE_1.md](../tests/MANUAL_TESTING_PHASE_1.md) dla pełnego scenariusza testowego z krokami, komendami i checklistą.
+
+**Urządzenia do testu:**
+| Urządzenie | Status | Uwagi |
+|------------|--------|-------|
+| Olympus LS-P1 | [ ] | Legacy support |
+| Zoom H1/H6 | [ ] | Popular recorder |
+| Generic SD card | [ ] | Z plikami .mp3 |
+| USB flash drive | [ ] | Z plikami .wav |
+| iPhone (jako dysk) | [ ] | DCIM folder |
+| Empty USB drive | [ ] | NIE powinien być wykryty |
+
+**Quick test steps:**
+1. Podłącz urządzenie
+2. Sprawdź log: czy wykryte?
+3. Jeśli ma audio - czy transkrypcja startuje?
+4. Odłącz i podłącz ponownie
+
+**Watch modes do przetestowania:**
+- [ ] **"auto"** - automatyczne wykrywanie urządzeń z audio
+- [ ] **"specific"** - tylko urządzenia z listy `watched_volumes`
+- [ ] **"manual"** - brak auto-detekcji
+
+---
+
+### Scenario: Freemium Flow (v2.0.0)
+
+**Cel:** Weryfikacja FREE vs PRO features.
+
+**Test FREE:**
+1. Uruchom bez licencji PRO
+2. Wykonaj transkrypcję
+3. Sprawdź: AI summaries = disabled
+4. Sprawdź: AI tags = disabled
+5. Sprawdź: podstawowe tagi działają
+6. Kliknij "Upgrade to PRO"
+7. Sprawdź: otwiera się strona zakupu
+
+**Test PRO (symulacja):**
+1. Aktywuj testową licencję
+2. Sprawdź: AI summaries = enabled
+3. Wykonaj transkrypcję
+4. Sprawdź: summary w pliku .md
+5. Sprawdź: AI tags w pliku .md
+
+---
+
+### Scenario: Offline Mode (v2.0.0)
+
+**Cel:** Aplikacja działa bez internetu.
+
+**Kroki:**
+1. Wyłącz internet
+2. Uruchom Transrec (z już pobranym whisper)
+3. Podłącz recorder
+4. Wykonaj transkrypcję
+
+**Expected:**
+- [ ] Transkrypcja działa (lokalna)
+- [ ] AI features graceful fail (log warning)
+- [ ] License check używa cache
+
+---
+
+## 📋 Beta Testing Checklist (v2.0.0)
+
+### Przed wysłaniem do beta testerów:
+
+- [ ] Wszystkie unit tests pass
+- [ ] Build script działa
+- [ ] Notaryzacja przeszła
+- [ ] DMG testowane na czystym systemie
+- [ ] README zaktualizowane
+- [ ] Known issues udokumentowane
+
+### Instrukcje dla beta testerów:
+
+```markdown
+## Beta Test Instructions
+
+1. Download: [link do DMG]
+2. Install: Drag to Applications
+3. Run: Double-click Transrec.app
+4. Complete wizard
+5. Connect your recorder
+6. Report issues: [link do GitHub Issues]
+
+### What to test:
+- [ ] Installation smooth?
+- [ ] Wizard understandable?
+- [ ] Your recorder detected?
+- [ ] Transcription works?
+- [ ] Any crashes?
+
+### Feedback form:
+[link do Google Form]
+```
+
+### Po beta testingu:
+
+- [ ] Wszystkie critical bugs naprawione
+- [ ] Feedback zebrano
+- [ ] Release notes napisane
+- [ ] Tag v2.0.0 utworzony
+
+---
+
+> **Powiązane dokumenty:**
+> - [PUBLIC-DISTRIBUTION-PLAN.md](PUBLIC-DISTRIBUTION-PLAN.md) - Pełna strategia testowania per faza
+> - [DEVELOPMENT.md](DEVELOPMENT.md) - Przewodnik deweloperski
+> - [CHANGELOG.md](../CHANGELOG.md) - Historia zmian
 
 
 
