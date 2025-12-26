@@ -35,6 +35,8 @@ from src.app_core import OlympusTranscriber
 from src.app_status import AppStatus
 from src.state_manager import reset_state
 from src.transcriber import send_notification
+from src.setup.downloader import DependencyDownloader
+from src.setup.errors import NetworkError, DiskSpaceError, DownloadError
 
 
 class OlympusMenuApp(rumps.App):
@@ -87,11 +89,116 @@ class OlympusMenuApp(rumps.App):
         )
         self.menu.add(self.quit_item)
 
+        # Check dependencies before starting
+        self._check_dependencies()
+        
         # Start status update timer
         rumps.Timer(self._update_status, 2).start()  # Update every 2 seconds
         
         # Start retranscribe menu refresh timer
         rumps.Timer(self._refresh_retranscribe_menu, 10).start()  # Update every 10 seconds
+
+    def _check_dependencies(self):
+        """Sprawdź czy wszystkie zależności są zainstalowane."""
+        try:
+            downloader = DependencyDownloader()
+            if downloader.check_all():
+                logger.info("✓ Wszystkie zależności zainstalowane")
+                return True
+            
+            # Brakuje zależności - pokaż komunikat
+            logger.warning("Brakuje zależności - wymagane pobranie")
+            response = rumps.alert(
+                title="📥 Pobieranie zależności",
+                message=(
+                    "Transrec wymaga pobrania silnika transkrypcji (~500MB).\n\n"
+                    "Czy chcesz pobrać teraz?\n\n"
+                    "Wymagane:\n"
+                    "• whisper.cpp (~10MB)\n"
+                    "• ffmpeg (~15MB)\n"
+                    "• Model transkrypcji (~466MB)"
+                ),
+                ok="Pobierz teraz",
+                cancel="Pomiń"
+            )
+            
+            if response == 1:  # OK clicked
+                self._download_dependencies()
+            else:
+                logger.info("Użytkownik pominął pobieranie zależności")
+                self.status_item.title = "Status: Wymagane pobranie zależności"
+            
+            return False
+            
+        except (NetworkError, DiskSpaceError, DownloadError) as e:
+            logger.error(f"Błąd podczas sprawdzania zależności: {e}")
+            rumps.alert(
+                title="⚠️ Błąd",
+                message=f"Nie można pobrać zależności:\n\n{str(e)}",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Błąd pobierania zależności"
+            return False
+        except Exception as e:
+            logger.error(f"Nieoczekiwany błąd: {e}", exc_info=True)
+            return False
+    
+    def _download_dependencies(self):
+        """Pobierz wszystkie brakujące zależności z progress callback."""
+        def progress_callback(name: str, progress: float):
+            """Update status z postępem pobierania."""
+            percent = int(progress * 100)
+            self.status_item.title = f"Status: Pobieranie {name}... {percent}%"
+            logger.debug(f"Pobieranie {name}: {percent}%")
+        
+        try:
+            downloader = DependencyDownloader(progress_callback=progress_callback)
+            downloader.download_all()
+            
+            logger.info("✓ Wszystkie zależności pobrane")
+            rumps.alert(
+                title="✅ Gotowe",
+                message="Wszystkie zależności zostały pobrane.\n\nAplikacja jest gotowa do użycia.",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Gotowe"
+            
+        except NetworkError as e:
+            logger.error(f"Brak połączenia: {e}")
+            rumps.alert(
+                title="⚠️ Brak połączenia",
+                message=(
+                    "Brak połączenia z internetem.\n\n"
+                    "Transrec wymaga jednorazowego pobrania silnika transkrypcji (~500MB).\n"
+                    "Połącz się z internetem i spróbuj ponownie."
+                ),
+                ok="OK"
+            )
+            self.status_item.title = "Status: Brak połączenia"
+        except DiskSpaceError as e:
+            logger.error(f"Brak miejsca: {e}")
+            rumps.alert(
+                title="⚠️ Brak miejsca",
+                message=str(e),
+                ok="OK"
+            )
+            self.status_item.title = "Status: Brak miejsca"
+        except DownloadError as e:
+            logger.error(f"Błąd pobierania: {e}")
+            rumps.alert(
+                title="⚠️ Błąd pobierania",
+                message=f"Nie udało się pobrać zależności:\n\n{str(e)}\n\nSpróbuj ponownie później.",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Błąd pobierania"
+        except Exception as e:
+            logger.error(f"Nieoczekiwany błąd: {e}", exc_info=True)
+            rumps.alert(
+                title="⚠️ Błąd",
+                message=f"Nieoczekiwany błąd:\n\n{str(e)}",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Błąd"
 
     def _update_status(self, _):
         """Update status menu item based on current state."""

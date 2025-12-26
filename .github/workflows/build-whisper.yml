@@ -1,0 +1,79 @@
+name: Build Whisper.cpp and FFmpeg
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'deps-v*'
+
+jobs:
+  build-whisper:
+    runs-on: macos-14  # Apple Silicon runner
+    
+    steps:
+      - name: Checkout whisper.cpp
+        uses: actions/checkout@v4
+        with:
+          repository: ggerganov/whisper.cpp
+          path: whisper.cpp
+      
+      - name: Build whisper.cpp for ARM64 with Core ML
+        run: |
+          cd whisper.cpp
+          cmake -B build \
+            -DWHISPER_COREML=ON \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release -j
+      
+      - name: Find whisper-cli binary
+        id: find_binary
+        run: |
+          if [ -f "whisper.cpp/build/bin/whisper-cli" ]; then
+            echo "binary_path=whisper.cpp/build/bin/whisper-cli" >> $GITHUB_OUTPUT
+          elif [ -f "whisper.cpp/build/bin/main" ]; then
+            echo "binary_path=whisper.cpp/build/bin/main" >> $GITHUB_OUTPUT
+          else
+            echo "Error: whisper-cli binary not found"
+            exit 1
+          fi
+      
+      - name: Download FFmpeg
+        run: |
+          # Pobierz statyczny ffmpeg z evermeet.cx (trusted source)
+          curl -L -o ffmpeg-arm64 https://evermeet.cx/ffmpeg/ffmpeg-6.1.zip
+          unzip -q ffmpeg-6.1.zip
+          chmod +x ffmpeg
+          mv ffmpeg ffmpeg-arm64
+      
+      - name: Generate checksums
+        run: |
+          shasum -a 256 ${{ steps.find_binary.outputs.binary_path }} > whisper-cli-arm64.sha256
+          shasum -a 256 ffmpeg-arm64 > ffmpeg-arm64.sha256
+          cat whisper-cli-arm64.sha256
+          cat ffmpeg-arm64.sha256
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.find_binary.outputs.binary_path }}
+            ffmpeg-arm64
+            whisper-cli-arm64.sha256
+            ffmpeg-arm64.sha256
+          tag_name: deps-v1.0.0
+          name: Dependencies v1.0.0
+          body: |
+            Pre-built binaries for Transrec v2.0.0
+            
+            - whisper-cli-arm64: whisper.cpp binary with Core ML support
+            - ffmpeg-arm64: Static FFmpeg binary
+            
+            Checksums:
+            - whisper-cli-arm64: $(cat whisper-cli-arm64.sha256 | cut -d' ' -f1)
+            - ffmpeg-arm64: $(cat ffmpeg-arm64.sha256 | cut -d' ' -f1)
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

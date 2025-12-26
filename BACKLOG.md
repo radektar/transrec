@@ -32,8 +32,8 @@
 - [x] Aktualizacja dokumentów dla v2.0.0
 
 #### v2.0.0 FREE (~5 tygodni)
-- [ ] **Faza 1:** Uniwersalne źródła nagrań (nie tylko Olympus LS-P1)
-- [ ] **Faza 2:** System pobierania whisper.cpp/modeli on-demand
+- [x] **Faza 1:** Uniwersalne źródła nagrań (nie tylko Olympus LS-P1) ⚠️ *Testy manualne wymagane przed produkcją*
+- [x] **Faza 2:** System pobierania whisper.cpp/modeli on-demand 🚧 *WIP - wymaga GitHub Release i testów manualnych*
 - [ ] **Faza 3:** First-run wizard z konfiguracją
 - [ ] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller)
 - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
