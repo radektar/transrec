@@ -804,3 +804,4 @@ Testy manualne są **PASS** jeśli:
 - [TESTING-GUIDE.md](../Docs/TESTING-GUIDE.md) - Ogólny przewodnik testowania
 - [Plan Fazy 2](../../.cursor/plans/faza_2_-_dependency_downloader_591ac1ca.plan.md) - Szczegółowy plan implementacji
 
+
