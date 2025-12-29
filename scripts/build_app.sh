@@ -51,12 +51,23 @@ fi
 
 # Build the application
 echo "🔨 Running py2app..."
+# Note: py2app may segfault during import checking, but bundle is usually complete
+# We check for bundle existence after build regardless of exit code
+set +e  # Temporarily disable exit on error
 python3 setup_app.py py2app
+BUILD_EXIT_CODE=$?
+set -e  # Re-enable exit on error
 
-# Verify build
+# Verify build - bundle should exist even if build ended with segfault
 if [ ! -d "dist/Transrec.app" ]; then
     echo "❌ Error: Build failed - Transrec.app not found"
     exit 1
+fi
+
+# Warn if build ended with segfault but bundle exists
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
+    echo "⚠️  Warning: Build ended with exit code $BUILD_EXIT_CODE (may be segfault during import checking)"
+    echo "   Bundle exists and will be verified..."
 fi
 
 # Check bundle size

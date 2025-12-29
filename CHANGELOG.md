@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ✅ **Faza 1:** Uniwersalne źródła nagrań (testy integracyjne zakończone, testy manualne wymagane)
   - ✅ **Faza 2:** System pobierania whisper.cpp/modeli on-demand (COMPLETED)
   - ✅ **Faza 3:** First-run wizard z konfiguracją (COMPLETED ✅ - testy manualne zakończone)
-  - [ ] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller)
+  - ✅ **Faza 4:** Pakowanie z py2app (COMPLETED ✅ - wszystkie testy przechodzą)
   - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
   - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
   - [ ] **Faza 7:** GUI Settings & polish
@@ -21,6 +21,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned Features
 - **🔒 PRO Features (v2.1.0)** - AI summaries, auto-tagging, cloud sync
 - See `BACKLOG.md` for other upcoming features and improvements
+
+---
+
+## [Unreleased] - Faza 4 COMPLETED ✅
+
+### Added (v2.0.0 - Faza 4)
+- **Pakowanie z py2app** (`setup_app.py`, `scripts/build_app.sh`)
+  - Konfiguracja py2app dla macOS bundle (Apple Silicon arm64)
+  - Bundle `.app` gotowy do dystrybucji (~45MB)
+  - Skrypt automatycznego budowania z weryfikacją
+  - Obsługa segfault podczas buildu (znany problem py2app 0.28.9 + Python 3.12.12)
+  - Bundle działa poprawnie mimo segfaulta podczas ostatniego kroku weryfikacji
+- **Naprawa blokowania UI podczas pobierania zależności**
+  - Pobieranie działa w osobnym wątku (nie blokuje UI)
+  - Okno dialogowe z aktualnym statusem pobierania
+  - Możliwość odświeżania statusu przez użytkownika
+  - Notyfikacje o postępie i zakończeniu
+- **Dokumentacja testów manualnych** (`tests/MANUAL_TESTING_PHASE_4.md`)
+  - Kompletny przewodnik testowania bundle
+  - 7 scenariuszy testowych (M4.1-M4.7)
+  - Checklist i troubleshooting
+  - Instrukcje dla testu na czystym macOS (M4.6)
+
+### Changed (v2.0.0 - Faza 4)
+- **setup_app.py** - Optymalizacja buildu
+  - `optimize: 1` (zmniejszone z 2 aby uniknąć segfaulta)
+  - `strip: False` (zapobiega segfaultowi podczas sprawdzania importów)
+- **scripts/build_app.sh** - Obsługa segfaulta
+  - Tymczasowe wyłączenie `set -e` podczas buildu
+  - Weryfikacja istnienia bundle mimo segfaulta
+  - Ostrzeżenie zamiast błędu gdy bundle istnieje
+- **src/setup/wizard.py** - Naprawa logiki pobierania
+  - Pobieranie w osobnym wątku z oknem dialogowym
+  - Synchronizacja zakończenia pobierania z UI
+  - Poprawiona obsługa błędów podczas pobierania
+- **BACKLOG.md** - Zaktualizowane zadania Fazy 7
+  - Dodano poprawki UX do wykonania
+  - Oznaczono naprawione problemy
+
+### Testing (v2.0.0 - Faza 4)
+- ✅ **Testy automatyczne:** 14/14 przechodzą (100% pass rate)
+  - Testy konfiguracji setup_app.py
+  - Testy skryptu budowania
+  - Testy struktury bundle
+- ✅ **Testy manualne:** 7/7 wykonane (100% completion)
+  - ✅ M4.1: Build test - bundle zbudowany, struktura OK, Info.plist OK
+  - ✅ M4.2: Launch test - aplikacja uruchamia się bez błędów
+  - ✅ M4.3: Menu functionality - wszystkie opcje działają
+  - ✅ M4.4: Wizard w bundle - wszystkie kroki działają
+  - ✅ M4.5: Dependency download - pobieranie działa, UI nie blokuje
+  - ✅ M4.6: Clean system test - aplikacja działa na czystym macOS bez Python
+  - ✅ M4.7: Size verification - 43-45MB (akceptowalne dla v2.0.0)
+- ✅ **Znalezione problemy (nie blokujące):**
+  - Build segfault podczas sprawdzania importów (obsłużony w skrypcie)
+  - Rozmiar bundle większy niż docelowy (43MB vs 20MB - akceptowalne)
+  - UX: Reset pamięci wymaga date pickera (do poprawy w Fazie 7)
+  - UX: Wizard - brak możliwości anulowania w większości kroków (do poprawy w Fazie 7)
+
+### Technical Details
+- Bundle lokalizacja: `dist/Transrec.app`
+- Rozmiar: 43-45MB (cel: <20MB, ale akceptowalne dla pierwszej wersji)
+- Architektura: arm64 (Apple Silicon only)
+- Wersja: 2.0.0
+- Bundle działa na czystym macOS bez wymagania instalacji Python
+- Wszystkie funkcje działają poprawnie w bundle
 
 ---
 

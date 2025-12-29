@@ -39,6 +39,9 @@
 - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
 - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
 - [ ] **Faza 7:** GUI Settings & polish
+  - [ ] Date picker dla "Resetuj pamięć od..." (zamiast prostego dialogu z 7 dniami)
+  - [ ] Przycisk "Anuluj" w każdym kroku wizarda (oprócz pobierania, gdzie już działa)
+  - [ ] **KRYTYCZNE:** Naprawa blokowania UI podczas pobierania zależności - przenieść pobieranie do osobnego wątku z progress dialogiem
 - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
 
 #### v2.1.0 PRO (~3 tygodnie po FREE)

@@ -84,7 +84,8 @@ OPTIONS = {
         'unittest',  # Test framework
     ],
     'arch': 'arm64',  # Apple Silicon only
-    'optimize': 2,  # Bytecode optimization
+    'optimize': 1,  # Bytecode optimization (reduced from 2 to avoid segfault)
+    'strip': False,  # Don't strip symbols - avoids segfault during import checking
 }
 
 setup(
