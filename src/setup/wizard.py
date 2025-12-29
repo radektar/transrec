@@ -10,6 +10,8 @@ from src.setup.downloader import DependencyDownloader
 from src.setup.permissions import check_full_disk_access, open_fda_preferences
 from src.setup.errors import NetworkError, DiskSpaceError, DownloadError
 from src.logger import logger
+from src.ui.dialogs import choose_folder_dialog
+from src.ui.constants import TEXTS
 
 
 class WizardStep(Enum):
@@ -275,9 +277,12 @@ class SetupWizard:
             ),
             ok="Otwórz Ustawienia",
             cancel="Pomiń",
+            other="Anuluj",
         )
 
-        if response == 1:
+        if response == -1:  # Anuluj (other button)
+            return "cancel"
+        elif response == 1:  # Otwórz Ustawienia
             open_fda_preferences()
             rumps.alert(
                 title="Gotowe?",
@@ -300,12 +305,15 @@ class SetupWizard:
             ),
             ok="Automatycznie",
             cancel="Określone dyski",
+            other="Anuluj",
         )
 
-        if response == 1:
+        if response == -1:  # Anuluj (other button)
+            return "cancel"
+        elif response == 1:  # Automatycznie
             self.settings.watch_mode = "auto"
             self.settings.watched_volumes = []
-        else:
+        else:  # Określone dyski
             # Pytaj o nazwy dysków
             window = rumps.Window(
                 title="Nazwy dysków",
@@ -328,55 +336,117 @@ class SetupWizard:
 
     def _show_output_config(self) -> str:
         """Konfiguracja folderu docelowego."""
-        window = rumps.Window(
-            title="📂 Folder na transkrypcje",
+        # Używamy rumps.alert z trzema przyciskami: ok, cancel, other
+        # ok = Wybierz folder, cancel = Użyj domyślnego, other = Wstecz
+        # Dodamy opcję "Anuluj" w drugim dialogu jeśli użytkownik wybierze folder
+        response = rumps.alert(
+            title=TEXTS["folder_picker_title"],
             message=(
-                "Gdzie zapisywać pliki z transkrypcjami?\n\n"
-                "Domyślnie: folder Obsidian w iCloud\n"
-                "(możesz zmienić na dowolny folder)"
+                f"{TEXTS['folder_picker_message']}\n\n"
+                f"Aktualnie: {self.settings.output_dir}"
             ),
-            default_text=self.settings.output_dir,
-            ok="OK",
-            cancel="Wstecz",
-            dimensions=(400, 24),
+            ok=TEXTS["folder_picker_select"],
+            cancel=TEXTS["folder_picker_default"],
+            other=TEXTS["folder_picker_back"],
         )
-        result = window.run()
-
-        if result.clicked == 0:
+        
+        if response == -1:  # other = Wstecz (w rumps -1 to other)
             return "back"
-
-        self.settings.output_dir = result.text.strip()
-        return "next"
+        elif response == 0:  # Użyj domyślnego
+            return "next"
+        # else response == 1: Wybierz folder
+        
+        # Wybierz folder przez NSOpenPanel
+        folder_path = choose_folder_dialog()
+        if folder_path:
+            self.settings.output_dir = folder_path
+            return "next"
+        else:
+            # User cancelled folder picker - zapytaj czy chce użyć domyślnego czy anulować
+            response2 = rumps.alert(
+                title=TEXTS["folder_picker_title"],
+                message="Anulowano wybór folderu. Co chcesz zrobić?",
+                ok="Użyj domyślnego",
+                cancel="Anuluj konfigurację",
+                other="Wstecz",
+            )
+            
+            if response2 == -1:  # Wstecz
+                return "back"
+            elif response2 == 0:  # Anuluj konfigurację
+                return "cancel"
+            else:  # Użyj domyślnego
+                return "next"
 
     def _show_language(self) -> str:
-        """Konfiguracja języka transkrypcji."""
-        # Lista języków jako tekst
-        lang_options = "\n".join(
-            [f"• {code}: {name}" for code, name in SUPPORTED_LANGUAGES.items()]
-        )
-
-        window = rumps.Window(
-            title="🗣️ Język transkrypcji",
-            message=(
-                f"W jakim języku są Twoje nagrania?\n\n"
-                f"Dostępne opcje:\n{lang_options}\n\n"
-                f"Wpisz kod języka:"
-            ),
-            default_text=self.settings.language,
-            ok="OK",
-            cancel="Wstecz",
-            dimensions=(200, 24),
-        )
-        result = window.run()
-
-        if result.clicked == 0:
-            return "back"
-
-        lang = result.text.strip().lower()
-        if lang in SUPPORTED_LANGUAGES:
-            self.settings.language = lang
-
-        return "next"
+        """Konfiguracja języka transkrypcji z dropdown."""
+        try:
+            from AppKit import NSAlert, NSPopUpButton, NSRect
+            
+            alert = NSAlert.alloc().init()
+            alert.setMessageText_("🗣️ Język transkrypcji")
+            alert.setInformativeText_(
+                "Wybierz domyślny język dla wszystkich nagrań.\n\n"
+                "Możesz zmienić to później w Ustawieniach."
+            )
+            
+            # Utwórz dropdown
+            popup = NSPopUpButton.alloc().initWithFrame_(NSRect((0, 0), (250, 24)))
+            for code, name in SUPPORTED_LANGUAGES.items():
+                popup.addItemWithTitle_(f"{name} ({code})")
+            
+            # Ustaw aktualną wartość
+            lang_codes = list(SUPPORTED_LANGUAGES.keys())
+            if self.settings.language in lang_codes:
+                current_idx = lang_codes.index(self.settings.language)
+                popup.selectItemAtIndex_(current_idx)
+            
+            # Dodaj do alertu
+            alert.setAccessoryView_(popup)
+            alert.addButtonWithTitle_("OK")
+            alert.addButtonWithTitle_("Wstecz")
+            alert.addButtonWithTitle_("Anuluj")
+            
+            response = alert.runModal()
+            # NSAlert button responses: 1000=OK, 1001=Wstecz, 1002=Anuluj
+            if response == 1000:  # OK
+                selected_idx = popup.indexOfSelectedItem()
+                selected_code = lang_codes[selected_idx]
+                self.settings.language = selected_code
+                return "next"
+            elif response == 1001:  # Wstecz
+                return "back"
+            else:  # Anuluj (1002)
+                return "cancel"
+        except ImportError:
+            # Fallback do starej metody jeśli AppKit nie dostępny
+            logger.warning("AppKit not available, using text input fallback")
+            lang_options = "\n".join(
+                [f"• {code}: {name}" for code, name in SUPPORTED_LANGUAGES.items()]
+            )
+            
+            window = rumps.Window(
+                title="🗣️ Język transkrypcji",
+                message=(
+                    f"W jakim języku są Twoje nagrania?\n\n"
+                    f"Dostępne opcje:\n{lang_options}\n\n"
+                    f"Wpisz kod języka:"
+                ),
+                default_text=self.settings.language,
+                ok="OK",
+                cancel="Wstecz",
+                dimensions=(200, 24),
+            )
+            result = window.run()
+            
+            if result.clicked == 0:
+                return "back"
+            
+            lang = result.text.strip().lower()
+            if lang in SUPPORTED_LANGUAGES:
+                self.settings.language = lang
+            
+            return "next"
 
     def _show_ai_config(self) -> str:
         """Konfiguracja AI podsumowań (opcjonalne)."""
@@ -391,9 +461,12 @@ class SetupWizard:
             ),
             ok="Pomiń",
             cancel="Skonfiguruj API",
+            other="Anuluj",
         )
 
-        if response == 1:  # Pomiń
+        if response == -1:  # Anuluj (other button)
+            return "cancel"
+        elif response == 1:  # Pomiń
             self.settings.enable_ai_summaries = False
             return "next"
 

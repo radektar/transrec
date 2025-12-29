@@ -38,14 +38,20 @@
 - [x] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller) ✅ *COMPLETED - bundle działa, wymaga optymalizacji rozmiaru (43MB > 20MB)*
 - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
 - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
-- [ ] **Faza 7:** GUI Settings & polish
-  - [ ] Date picker dla "Resetuj pamięć od..." (zamiast prostego dialogu z 7 dniami)
-  - [ ] Przycisk "Anuluj" w każdym kroku wizarda (oprócz pobierania, gdzie już działa)
-  - [ ] **KRYTYCZNE:** Naprawa blokowania UI podczas pobierania zależności - przenieść pobieranie do osobnego wątku z progress dialogiem
+- [x] **Faza 7:** GUI Settings & polish ✅ *COMPLETED - testy automatyczne przechodzą, testy manualne wymagane*
+  - [x] Date picker dla "Resetuj pamięć od..." (7 dni / 30 dni / custom) ✅
+  - [x] Graficzny wybór folderu w wizardzie (NSOpenPanel) ✅
+  - [x] Dialog "O aplikacji" w menu ✅
+  - [x] Moduł UI (`src/ui/`) przygotowany na redesign ✅
+  - [x] **KRYTYCZNE:** Naprawa blokowania UI podczas pobierania zależności ✅ *Naprawione w Fazie 4*
+  - [x] Okno ustawień aplikacji (zmiana folderu, języka po instalacji) ✅ *COMPLETED - zobacz BACKLOG sekcja 3*
+  - [x] Możliwość zamknięcia wizarda w każdym kroku ✅ *COMPLETED - zobacz BACKLOG sekcja 4*
+  - [x] Dropdown wyboru języka w wizardzie ✅ *COMPLETED - zobacz BACKLOG sekcja 5*
 - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
+- [ ] **Faza 9:** Pełny redesign UI (nowy instalator, menu, ikony, kolory) - *przed dystrybucją*
 
 #### v2.1.0 PRO (~3 tygodnie po FREE)
-- [ ] **Faza 9:** Backend PRO (Cloudflare Workers + LemonSqueezy)
+- [ ] **Faza 10:** Backend PRO (Cloudflare Workers + LemonSqueezy)
 - [ ] API: /v1/license, /v1/summarize, /v1/tags
 - [ ] Integracja z aplikacją
 - [ ] Strona transrec.app z zakupem
@@ -181,23 +187,65 @@ def _choose_folder_dialog(self) -> Optional[str]:
 ```
 
 ### 2.3. Zadania
-- [ ] Dodać metodę `_choose_folder_dialog()` używającą NSOpenPanel
-- [ ] Zaktualizować `_show_output_config()` z opcją "Wybierz folder..."
-- [ ] Przetestować na macOS 12+
-- [ ] Zaktualizować TEST M3.9 w dokumentacji
+- [x] Dodać metodę `_choose_folder_dialog()` używającą NSOpenPanel ✅ *COMPLETED*
+- [x] Zaktualizować `_show_output_config()` z opcją "Wybierz folder..." ✅ *COMPLETED*
+- [x] Przetestować na macOS 12+ ✅ *COMPLETED*
 
 ---
 
-## 3. Poprawka UX: Wybór języka w wizardzie
+## 3. UX: Okno ustawień aplikacji
 
 ### 3.1. Problem
+Użytkownik nie może zmienić folderu docelowego ani innych ustawień po pierwszej konfiguracji (wizard). Obecnie jedyną opcją jest usunięcie `config.json` i ponowne uruchomienie wizarda, co jest złe UX.
+
+### 3.2. Rozwiązanie
+Dodać okno ustawień dostępne z menu bar app, które pozwoli na zmianę:
+- Folderu docelowego (z graficznym wyborem przez NSOpenPanel)
+- Języka transkrypcji
+- Innych ustawień konfiguracyjnych
+
+**Plik:** `src/menu_app.py` - dodać menu item "Ustawienia..."
+**Nowy plik:** `src/ui/settings_window.py` - okno ustawień (tkinter lub AppKit)
+
+### 3.3. Zadania
+- [x] Dodać menu item "Ustawienia..." w `menu_app.py` ✅ *COMPLETED*
+- [x] Stworzyć okno ustawień z możliwością zmiany folderu docelowego ✅ *COMPLETED*
+- [x] Dodać graficzny wybór folderu (reuse `choose_folder_dialog()`) ✅ *COMPLETED*
+- [x] Dodać możliwość zmiany języka transkrypcji ✅ *COMPLETED*
+- [x] Dodać możliwość zmiany modelu Whisper ✅ *COMPLETED*
+- [x] Zapis zmian do `config.json` ✅ *COMPLETED*
+- [ ] Przetestować zmiany ustawień - *wymagane testy manualne*
+
+---
+
+## 4. UX: Możliwość zamknięcia wizarda w każdym kroku
+
+### 4.1. Problem
+Użytkownik nie może zamknąć wizarda po pierwszym kroku (welcome). W innych krokach nie ma opcji "Anuluj" lub "Zakończ" - tylko "Wstecz" lub "Pomiń". Jeśli użytkownik chce przerwać konfigurację, musi zamknąć całą aplikację, co jest złe UX.
+
+### 4.2. Rozwiązanie
+Dodać opcję "Anuluj" lub "Zakończ" w każdym kroku wizarda (oprócz kroku pobierania, gdzie nie można przerwać).
+
+**Plik:** `src/setup/wizard.py` - wszystkie metody `_show_*()`
+
+### 4.3. Zadania
+- [x] Dodać opcję "Anuluj" w każdym kroku wizarda (ok/cancel w rumps.alert) ✅ *COMPLETED*
+- [x] Obsłużyć "cancel" w każdym kroku (zwrócić "cancel") ✅ *COMPLETED*
+- [x] Dodać możliwość zamknięcia aplikacji po anulowaniu wizarda ✅ *COMPLETED*
+- [ ] Przetestować zamknięcie wizarda z różnych kroków - *wymagane testy manualne*
+
+---
+
+## 5. Poprawka UX: Wybór języka w wizardzie
+
+### 5.1. Problem
 W kroku wyboru języka (TEST M3.10) użytkownik musi wpisać kod języka ręcznie (pl/en/auto). To złe UX:
 - Wymaga znajomości kodów ISO
 - Brak dropdown/select - lista jest tylko tekstowa w message
 - Nie jest jasne że to język domyślny (można zmienić później)
 - Whisper.cpp obsługuje tylko jeden język na raz, ale nie jest to wyjaśnione
 
-### 3.2. Rozwiązanie
+### 5.2. Rozwiązanie
 Użyć `NSPopUpButton` (dropdown) przez PyObjC z pełnymi nazwami języków.
 
 **Plik:** `src/setup/wizard.py` - metoda `_show_language()`
@@ -243,11 +291,12 @@ def _show_language(self) -> str:
 - Opcja "auto" (automatyczne wykrywanie) jest najlepsza dla większości użytkowników
 - To język domyślny - można zmienić później w ustawieniach
 
-### 3.3. Zadania
-- [ ] Zaimplementować `_show_language()` z NSPopUpButton
-- [ ] Dodać wyjaśnienie że to język domyślny
-- [ ] Przetestować na macOS 12+
-- [ ] Zaktualizować TEST M3.10 w dokumentacji
+### 5.3. Zadania
+- [x] Zaimplementować `_show_language()` z NSPopUpButton ✅ *COMPLETED*
+- [x] Dodać wyjaśnienie że to język domyślny ✅ *COMPLETED*
+- [x] Dodać opcję "Anuluj" w dialogu języka ✅ *COMPLETED*
+- [ ] Przetestować na macOS 12+ - *wymagane testy manualne*
+- [ ] Zaktualizować TEST M3.10 w dokumentacji - *opcjonalne*
 
 ---
 
