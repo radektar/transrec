@@ -1131,66 +1131,92 @@ jobs:
 
 ---
 
-### FAZA 7: GUI Settings & Polish (3-4 dni)
+### FAZA 7: GUI Settings & Polish (MVP) ✅ COMPLETED
 
-**Cel:** Okno ustawień i finalizacja UI.
+**Cel:** Minimalne poprawki UX istniejącego interfejsu z architekturą przygotowaną na przyszły redesign.
 
-#### 7.1. Okno ustawień
+**Status:** ✅ Zakończona (testy automatyczne: 18/18 pass, coverage 94%, testy manualne wymagane)
 
-**Plik:** `src/ui/settings_window.py`
+#### 7.1. Moduł UI
 
-```python
-import rumps
-from src.config.settings import UserSettings
+**Utworzone pliki:**
+- `src/ui/__init__.py` - eksporty modułu
+- `src/ui/constants.py` - stałe UI (APP_VERSION, APP_NAME, TEXTS) - łatwe do wymiany przy redesignie
+- `src/ui/dialogs.py` - reusable funkcje dialogów
 
-class SettingsWindow:
-    """Okno ustawień aplikacji."""
-    
-    def __init__(self):
-        self.settings = UserSettings.load()
-    
-    def show(self):
-        """Pokaż okno ustawień (używając natywnych dialogów)."""
-        # Główne menu ustawień
-        choices = [
-            "📁 Źródła nagrań",
-            "📂 Folder na transkrypcje",
-            "🗣️ Język transkrypcji", 
-            "🤖 AI Podsumowania",
-            "🔔 Powiadomienia",
-            "ℹ️ O aplikacji",
-        ]
-        
-        # Użyj rumps.alert z listą wyboru
-        # lub zewnętrznej biblioteki jak PyObjC dla NSWindow
-        ...
-```
+#### 7.2. Date picker dla "Resetuj pamięć"
 
-#### 7.2. Rozbudowa menu app
+**Zmodyfikowany plik:** `src/menu_app.py`
 
-**Aktualizacja:** `src/menu_app.py`
+- Dialog z opcjami: 7 dni / 30 dni / Inna data
+- Input daty w formacie YYYY-MM-DD z walidacją
+- Zastępuje prosty dialog z tylko opcją "7 dni"
 
-```python
-@rumps.clicked("Ustawienia...")
-def open_settings(self, _):
-    """Otwórz okno ustawień."""
-    settings_window = SettingsWindow()
-    settings_window.show()
+#### 7.3. Graficzny wybór folderu w wizardzie
 
-@rumps.clicked("Sprawdź aktualizacje...")
-def check_updates(self, _):
-    """Sprawdź dostępność aktualizacji."""
-    # Sprawdź GitHub API dla najnowszego release
-    ...
-```
+**Zmodyfikowany plik:** `src/setup/wizard.py`
 
-#### 7.3. Zadania
+- NSOpenPanel dla natywnego dialogu wyboru folderu
+- Fallback na tekstowy input gdy AppKit niedostępne
+- Dialog z opcjami: Wybierz folder / Użyj domyślnego / Wstecz
 
-- [ ] Zaimplementować `SettingsWindow`
-- [ ] Dodać opcję sprawdzania aktualizacji
-- [ ] Dodać "O aplikacji" z wersją i linkami
-- [ ] Przetestować wszystkie opcje menu
-- [ ] Polish: poprawić teksty, ikony, flow
+#### 7.4. Dialog "O aplikacji"
+
+**Zmodyfikowany plik:** `src/menu_app.py`
+
+- Nowy MenuItem "O aplikacji..." w menu
+- Wyświetla wersję, linki do strony i GitHub, informacje o licencji
+
+#### 7.5. Testy
+
+- ✅ Testy automatyczne: `tests/test_ui_constants.py`, `tests/test_ui_dialogs.py`
+- ✅ Coverage: 94% dla modułu `src/ui/`
+- [ ] Testy manualne: `tests/MANUAL_TESTING_PHASE_7.md` (9 scenariuszy)
+
+**Uwaga:** Pełne okno Settings i sprawdzanie aktualizacji zostały odłożone na Fazę 9 (pełny redesign UI).
+
+---
+
+### FAZA 9: Pełny redesign UI (przed dystrybucją) 🆕
+
+**Cel:** Całkowity redesign interfejsu użytkownika przed dystrybucją publiczną.
+
+**Szacowany czas:** 1-2 tygodnie
+
+#### 9.1. Nowy instalator/wizard
+
+- Wizualny redesign wizarda instalacyjnego
+- Lepsze UX z nowymi komponentami
+- Natywne komponenty macOS (date picker, dropdown języka)
+
+#### 9.2. Nowe menu aplikacji
+
+- Rozbudowane menu z dodatkowymi opcjami
+- Pełne okno Settings (zamiast prostych dialogów)
+- Sprawdzanie aktualizacji z auto-update
+
+#### 9.3. Nowe ikony i kolory
+
+- Branding i identyfikacja wizualna
+- Nowe ikony aplikacji
+- Dark mode support
+- Spójny design system
+
+#### 9.4. Decyzje do podjęcia przed Fazą 9
+
+- Technologia: rumps + PyObjC vs Swift UI vs Electron
+- Styl wizualny: minimalistyczny vs bogaty
+- System ikon: SF Symbols vs custom
+
+#### 9.5. Zadania
+
+- [ ] Wybór technologii UI
+- [ ] Projekt wizualny (mockupy)
+- [ ] Implementacja nowego instalatora
+- [ ] Implementacja nowego menu
+- [ ] Nowe ikony i kolory
+- [ ] Dark mode support
+- [ ] Testy UI (automatyczne + manualne)
 
 ---
 
@@ -1465,7 +1491,7 @@ class Summarizer:
 
 ---
 
-### FAZA 9: Backend PRO (5-7 dni) - OPCJONALNA
+### FAZA 10: Backend PRO (5-7 dni) - OPCJONALNA
 
 **Cel:** Serwer API dla funkcji PRO.
 
@@ -1682,10 +1708,10 @@ make -j8
 │        - Create-dmg                                             │
 │        - GitHub Actions workflow                                │
 │                                                                 │
-│ Cz-Pt: FAZA 7 - Polish & Testing                                │
-│        - Okno ustawień                                          │
-│        - Finalne testy                                          │
-│        - Dokumentacja                                           │
+│ Cz-Pt: FAZA 7 - GUI Settings & Polish (MVP)                     │
+│        - Date picker, folder picker, About dialog              │
+│        - Moduł UI przygotowany na redesign                     │
+│        - Testy automatyczne                                     │
 ├─────────────────────────────────────────────────────────────────┤
 │ TYDZIEŃ 5                                                       │
 ├─────────────────────────────────────────────────────────────────┤
@@ -1694,7 +1720,15 @@ make -j8
 │        - License manager (placeholder)                          │
 │        - UI "Uaktywnij PRO"                                     │
 │                                                                 │
-│ Cz-Pt: Testy końcowe & Release FREE                             │
+│ Cz-Pt: FAZA 9 - Pełny redesign UI                              │
+│        - Nowy instalator/wizard                                │
+│        - Nowe menu aplikacji                                   │
+│        - Nowe ikony i kolory                                    │
+│        - Dark mode support                                      │
+├─────────────────────────────────────────────────────────────────┤
+│ TYDZIEŃ 6                                                       │
+├─────────────────────────────────────────────────────────────────┤
+│ Pn-Pt: Testy końcowe & Release FREE                             │
 │        - Beta testing                                           │
 │        - GitHub Release v2.0.0                                  │
 │        - Ogłoszenie                                             │
@@ -1705,7 +1739,10 @@ KAMIENIE MILOWE FREE:
   🏁 M2 (Koniec T2): Działający wizard z pobieraniem
   🏁 M3 (Koniec T3): Działający .app bundle
   🏁 M4 (Koniec T4): Podpisany DMG
-  🏁 M5 (Koniec T5): 🎉 RELEASE v2.0.0 FREE
+  🏁 M5 (Koniec T5): GUI Settings & Polish (MVP)
+  🏁 M6 (Koniec T5): Infrastruktura Freemium
+  🏁 M7 (Koniec T6): Pełny redesign UI
+  🏁 M8 (Koniec T6): 🎉 RELEASE v2.0.0 FREE
 ```
 
 ### 6.2. Faza PRO (v2.1.0) - 2-3 tygodnie (po FREE)
@@ -1714,7 +1751,7 @@ KAMIENIE MILOWE FREE:
 ┌─────────────────────────────────────────────────────────────────┐
 │ TYDZIEŃ 6-7 (po release FREE)                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│ FAZA 9 - Backend PRO                                            │
+│ FAZA 10 - Backend PRO                                           │
 │        - Setup Cloudflare Workers                               │
 │        - Integracja LemonSqueezy                                │
 │        - API: /v1/license, /v1/summarize, /v1/tags              │
@@ -1746,10 +1783,10 @@ T1  │ ▓▓▓ F1-F2   │                  │             │
 T2  │ ▓▓▓ F2-F3   │                  │             │
 T3  │ ▓▓▓ F3-F4   │                  │             │
 T4  │ ▓▓▓ F5-F7   │                  │             │
-T5  │ ▓▓▓ F8      │ ← RELEASE FREE   │             │
+T5  │ ▓▓▓ F8-F9   │                  │             │
+T6  │ ▓▓▓ Testing │ ← RELEASE FREE   │             │
     │             │                  │             │
-T6  │             │                  │ ▓▓▓ F9      │
-T7  │             │                  │ ▓▓▓ F9      │
+T7  │             │                  │ ▓▓▓ F10     │
 T8  │             │                  │ ▓▓▓ Launch  │ ← RELEASE PRO
     └─────────────┘                  └─────────────┘
 ```
@@ -1969,7 +2006,7 @@ NIE: Oddzielne branche dla FREE/PRO
 5. **START:** Utworzenie `feature/faza-1-universal-sources`
 6. **TYDZIEŃ 1-5:** Implementacja FREE (Fazy 1-8)
 7. **RELEASE:** v2.0.0 FREE na GitHub
-8. **TYDZIEŃ 6-8:** Implementacja PRO (Faza 9) + utworzenie `transrec-backend`
+8. **TYDZIEŃ 6-8:** Implementacja PRO (Faza 10) + utworzenie `transrec-backend`
 9. **RELEASE:** v2.1.0 PRO
 
 ### Decyzje do podjęcia

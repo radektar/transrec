@@ -38,6 +38,10 @@ from src.transcriber import send_notification
 from src.setup.downloader import DependencyDownloader
 from src.setup.errors import NetworkError, DiskSpaceError, DownloadError
 from src.setup import SetupWizard
+from src.ui.dialogs import choose_date_dialog, show_about_dialog
+from src.ui.constants import TEXTS
+from src.ui.dialogs import choose_date_dialog, show_about_dialog
+from src.ui.constants import TEXTS
 
 
 class OlympusMenuApp(rumps.App):
@@ -81,6 +85,14 @@ class OlympusMenuApp(rumps.App):
         # Retranscribe submenu
         self.retranscribe_menu = rumps.MenuItem("Retranskrybuj plik...")
         self.menu.add(self.retranscribe_menu)
+
+        self.menu.add(rumps.separator)
+
+        self.about_item = rumps.MenuItem(
+            "O aplikacji...",
+            callback=self._show_about
+        )
+        self.menu.add(self.about_item)
 
         self.menu.add(rumps.separator)
 
@@ -293,35 +305,29 @@ class OlympusMenuApp(rumps.App):
 
     def _reset_memory(self, _):
         """Reset transcription memory to a specific date."""
-        # Show simple dialog with date input
-        # For simplicity, we'll use a predefined date (7 days ago)
-        # In a more advanced version, could use date picker
+        target_date = choose_date_dialog(default_days=7)
+        
+        if target_date is None:
+            return  # User cancelled
+        
+        success = reset_state(target_date)
 
-        response = rumps.alert(
-            "Resetuj pamięć",
-            "Czy chcesz zresetować pamięć do daty sprzed 7 dni?\n\n"
-            "To spowoduje, że przy następnym podłączeniu recordera\n"
-            "zostaną przetworzone wszystkie pliki z ostatnich 7 dni.",
-            ok="Tak",
-            cancel="Anuluj"
-        )
+        if success:
+            rumps.notification(
+                title="Transrec",
+                subtitle=TEXTS["reset_memory_success"],
+                message=f"Od: {target_date.strftime('%Y-%m-%d')}"
+            )
+        else:
+            rumps.alert(
+                "Błąd",
+                TEXTS["reset_memory_error"],
+                ok="OK"
+            )
 
-        if response == 1:  # "OK" button (1 = OK, 0 = Cancel)
-            target_date = datetime.now() - timedelta(days=7)
-            success = reset_state(target_date)
-
-            if success:
-                rumps.notification(
-                    title="Olympus Transcriber",
-                    subtitle="Pamięć zresetowana",
-                    message=f"Pamięć ustawiona na: {target_date.strftime('%Y-%m-%d')}"
-                )
-            else:
-                rumps.alert(
-                    "Błąd",
-                    "Nie udało się zresetować pamięci. Sprawdź logi.",
-                    ok="OK"
-                )
+    def _show_about(self, _):
+        """Show About dialog with app information."""
+        show_about_dialog()
 
     def _get_staged_files(self) -> List[Path]:
         """Get list of audio files in staging directory.

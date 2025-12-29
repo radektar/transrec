@@ -10,6 +10,8 @@ from src.setup.downloader import DependencyDownloader
 from src.setup.permissions import check_full_disk_access, open_fda_preferences
 from src.setup.errors import NetworkError, DiskSpaceError, DownloadError
 from src.logger import logger
+from src.ui.dialogs import choose_folder_dialog
+from src.ui.constants import TEXTS
 
 
 class WizardStep(Enum):
@@ -328,24 +330,48 @@ class SetupWizard:
 
     def _show_output_config(self) -> str:
         """Konfiguracja folderu docelowego."""
-        window = rumps.Window(
-            title="📂 Folder na transkrypcje",
+        response = rumps.alert(
+            title=TEXTS["folder_picker_title"],
             message=(
-                "Gdzie zapisywać pliki z transkrypcjami?\n\n"
-                "Domyślnie: folder Obsidian w iCloud\n"
-                "(możesz zmienić na dowolny folder)"
+                f"{TEXTS['folder_picker_message']}\n\n"
+                f"Aktualnie: {self.settings.output_dir}"
             ),
-            default_text=self.settings.output_dir,
-            ok="OK",
-            cancel="Wstecz",
-            dimensions=(400, 24),
+            ok=TEXTS["folder_picker_select"],
+            cancel=TEXTS["folder_picker_default"],
+            other=TEXTS["folder_picker_back"],
         )
-        result = window.run()
-
-        if result.clicked == 0:
+        
+        if response == 2:  # other = Wstecz
             return "back"
-
-        self.settings.output_dir = result.text.strip()
+        
+        if response == 0:  # Użyj domyślnego
+            return "next"
+        
+        # Wybierz folder przez NSOpenPanel
+        folder_path = choose_folder_dialog()
+        if folder_path:
+            self.settings.output_dir = folder_path
+        else:
+            # User cancelled folder picker - fallback to text input
+            window = rumps.Window(
+                title=TEXTS["folder_picker_title"],
+                message=(
+                    "Gdzie zapisywać pliki z transkrypcjami?\n\n"
+                    "Domyślnie: folder Obsidian w iCloud\n"
+                    "(możesz zmienić na dowolny folder)"
+                ),
+                default_text=self.settings.output_dir,
+                ok="OK",
+                cancel="Wstecz",
+                dimensions=(400, 24),
+            )
+            result = window.run()
+            
+            if result.clicked == 0:
+                return "back"
+            
+            self.settings.output_dir = result.text.strip()
+        
         return "next"
 
     def _show_language(self) -> str:

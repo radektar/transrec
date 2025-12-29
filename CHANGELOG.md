@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ✅ **Faza 4:** Pakowanie z py2app (COMPLETED ✅ - wszystkie testy przechodzą)
   - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
   - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
-  - [ ] **Faza 7:** GUI Settings & polish
+  - ✅ **Faza 7:** GUI Settings & polish (COMPLETED ✅ - testy automatyczne przechodzą, testy manualne wymagane)
   - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
+  - [ ] **Faza 9:** Pełny redesign UI (nowy instalator, menu, ikony, kolory)
 
 ### Planned Features
 - **🔒 PRO Features (v2.1.0)** - AI summaries, auto-tagging, cloud sync
@@ -24,9 +25,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - Faza 4 COMPLETED ✅
+## [1.15.0] - 2025-01-XX
 
-### Added (v2.0.0 - Faza 4)
+### Added (Faza 7)
+- **Moduł UI** (`src/ui/`)
+  - `src/ui/constants.py` - centralne miejsce na stałe UI (łatwe do wymiany przy redesignie)
+  - `src/ui/dialogs.py` - reusable funkcje dialogów (date picker, folder picker, about)
+- **Date picker dla "Resetuj pamięć"**
+  - Dialog z opcjami: 7 dni / 30 dni / Inna data
+  - Input daty w formacie YYYY-MM-DD z walidacją
+  - Zastępuje prosty dialog z tylko opcją "7 dni"
+- **Graficzny wybór folderu w wizardzie**
+  - NSOpenPanel dla natywnego dialogu wyboru folderu
+  - Fallback na tekstowy input gdy AppKit niedostępne
+- **Dialog "O aplikacji"**
+  - Nowy MenuItem w menu aplikacji
+  - Wyświetla wersję, linki do strony i GitHub, informacje o licencji
+- **Testy automatyczne** (`tests/test_ui_constants.py`, `tests/test_ui_dialogs.py`)
+  - 18 testów jednostkowych (100% pass rate)
+  - Coverage modułu UI: 94% (powyżej wymaganego 80%)
+- **Dokumentacja testów manualnych** (`tests/MANUAL_TESTING_PHASE_7.md`)
+  - 9 scenariuszy testowych (M7.1-M7.9)
+  - Checklist i procedury testowe
+
+### Changed (Faza 7)
+- **src/menu_app.py** - użycie nowego modułu UI
+  - Metoda `_reset_memory()` używa `choose_date_dialog()`
+  - Dodana metoda `_show_about()` z dialogiem O aplikacji
+- **src/setup/wizard.py** - użycie folder pickera
+  - Metoda `_show_output_config()` używa `choose_folder_dialog()`
+  - Dialog z opcjami: Wybierz folder / Użyj domyślnego / Wstecz
+
+### Testing (Faza 7)
+- ✅ **Testy automatyczne:** 18/18 przechodzą (100% pass rate)
+  - Testy stałych UI (9 testów)
+  - Testy dialogów (9 testów)
+  - Coverage: 94% dla modułu `src/ui/`
+- [ ] **Testy manualne:** 0/9 wykonane (wymagane przed produkcją)
+  - M7.1-M7.4: Date picker (różne opcje)
+  - M7.5-M7.7: Folder picker (NSOpenPanel)
+  - M7.8-M7.9: About dialog
+
+### Technical Details
+- Nowy moduł: `src/ui/` przygotowany na przyszły redesign UI
+- Stałe UI w `constants.py` - łatwe do wymiany przy Fazie 9
+- Funkcje dialogów w `dialogs.py` - reusable i testowalne
+
+---
+
+## [1.14.0] - 2025-12-29
+
+### Added (Faza 4)
 - **Pakowanie z py2app** (`setup_app.py`, `scripts/build_app.sh`)
   - Konfiguracja py2app dla macOS bundle (Apple Silicon arm64)
   - Bundle `.app` gotowy do dystrybucji (~45MB)
@@ -44,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Checklist i troubleshooting
   - Instrukcje dla testu na czystym macOS (M4.6)
 
-### Changed (v2.0.0 - Faza 4)
+### Changed (Faza 4)
 - **setup_app.py** - Optymalizacja buildu
   - `optimize: 1` (zmniejszone z 2 aby uniknąć segfaulta)
   - `strip: False` (zapobiega segfaultowi podczas sprawdzania importów)
@@ -60,7 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Dodano poprawki UX do wykonania
   - Oznaczono naprawione problemy
 
-### Testing (v2.0.0 - Faza 4)
+### Testing (Faza 4)
 - ✅ **Testy automatyczne:** 14/14 przechodzą (100% pass rate)
   - Testy konfiguracji setup_app.py
   - Testy skryptu budowania
@@ -89,9 +138,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - Faza 3 COMPLETED ✅
+## [1.13.0] - 2025-12-29
 
-### Added (v2.0.0 - Faza 3)
+### Added (Faza 3)
 - **First-Run Wizard** (`src/setup/wizard.py`)
   - 8-krokowy wizard konfiguracji przy pierwszym uruchomieniu
   - Automatyczne pobieranie zależności z progress bar (integracja z Fazą 2)
@@ -112,7 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatyczne otwieranie System Preferences -> Privacy -> Full Disk Access
   - Sprawdzanie dostępu do konkretnych volumów
 
-### Changed (v2.0.0 - Faza 3)
+### Changed (Faza 3)
 - **menu_app.py** - Integracja z wizardem przy starcie
   - Sprawdzanie `SetupWizard.needs_setup()` przed uruchomieniem daemona
   - Uruchamianie wizarda przy pierwszym starcie (z opóźnieniem dla GUI)
@@ -120,7 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Daemon uruchamia się dopiero po zakończeniu wizarda
   - Obsługa anulowania wizarda z komunikatem dla użytkownika
 
-### Testing (v2.0.0 - Faza 3)
+### Testing (Faza 3)
 - ✅ Testy jednostkowe: test_user_settings.py (6 testów, 100% pass)
 - ✅ Testy jednostkowe: test_permissions.py (6 testów, 100% pass)
 - ✅ Testy jednostkowe: test_wizard.py (8 testów, 100% pass)
@@ -137,9 +186,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] - Faza 2 COMPLETED ✅
+## [1.12.0] - 2025-12-26
 
-### Added (v2.0.0 - Faza 2 COMPLETED)
+### Added (Faza 2)
 - **Moduł pobierania zależności** (`src/setup/downloader.py`)
   - Klasa `DependencyDownloader` z automatycznym pobieraniem whisper.cpp i ffmpeg
   - Weryfikacja checksum SHA256 dla bezpieczeństwa
@@ -159,7 +208,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Testy integracyjne** (`tests/test_downloader_integration.py`)
   - Podstawowa struktura (do rozbudowy po utworzeniu GitHub Release)
 
-### Changed (v2.0.0 - Faza 2 COMPLETED)
+### Changed (Faza 2)
 - **src/config.py** - Nowa lokalizacja zależności
   - `WHISPER_CPP_PATH` domyślnie: `~/Library/Application Support/Transrec/bin/whisper-cli`
   - `WHISPER_CPP_MODELS_DIR` domyślnie: `~/Library/Application Support/Transrec/models/`
@@ -183,7 +232,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Bardziej nowoczesne API
   - Automatyczne follow_redirects
 
-### Testing (v2.0.0 - Faza 2 COMPLETED)
+### Testing (Faza 2)
 - ✅ Wszystkie testy jednostkowe przechodzą (20/20, 100% pass rate)
 - ✅ Wszystkie testy integracyjne przechodzą (5/5, 100% pass rate)
 - ✅ GitHub Release deps-v1.0.0 utworzony i przetestowany
@@ -894,6 +943,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Version History
 
+- **1.14.0** (2025-12-29) - Faza 4: Pakowanie z py2app, bundle .app gotowy do dystrybucji
+- **1.13.0** (2025-12-29) - Faza 3: First-run wizard z konfiguracją
+- **1.12.0** (2025-12-26) - Faza 2: System pobierania whisper.cpp/modeli on-demand
 - **1.11.0** (2025-12-17) - Documentation v2.0.0, Cursor rules, Git Flow strategy
 - **1.10.0** (2025-12-12) - File retranscription feature with menu app integration
 - **1.9.1** (2025-11-29) - Reduced false recorder detection triggers, optimized notification behavior

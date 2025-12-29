@@ -38,14 +38,17 @@
 - [x] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller) ✅ *COMPLETED - bundle działa, wymaga optymalizacji rozmiaru (43MB > 20MB)*
 - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
 - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
-- [ ] **Faza 7:** GUI Settings & polish
-  - [ ] Date picker dla "Resetuj pamięć od..." (zamiast prostego dialogu z 7 dniami)
-  - [ ] Przycisk "Anuluj" w każdym kroku wizarda (oprócz pobierania, gdzie już działa)
-  - [ ] **KRYTYCZNE:** Naprawa blokowania UI podczas pobierania zależności - przenieść pobieranie do osobnego wątku z progress dialogiem
+- [x] **Faza 7:** GUI Settings & polish ✅ *COMPLETED - testy automatyczne przechodzą, testy manualne wymagane*
+  - [x] Date picker dla "Resetuj pamięć od..." (7 dni / 30 dni / custom) ✅
+  - [x] Graficzny wybór folderu w wizardzie (NSOpenPanel) ✅
+  - [x] Dialog "O aplikacji" w menu ✅
+  - [x] Moduł UI (`src/ui/`) przygotowany na redesign ✅
+  - [x] **KRYTYCZNE:** Naprawa blokowania UI podczas pobierania zależności ✅ *Naprawione w Fazie 4*
 - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
+- [ ] **Faza 9:** Pełny redesign UI (nowy instalator, menu, ikony, kolory) - *przed dystrybucją*
 
 #### v2.1.0 PRO (~3 tygodnie po FREE)
-- [ ] **Faza 9:** Backend PRO (Cloudflare Workers + LemonSqueezy)
+- [ ] **Faza 10:** Backend PRO (Cloudflare Workers + LemonSqueezy)
 - [ ] API: /v1/license, /v1/summarize, /v1/tags
 - [ ] Integracja z aplikacją
 - [ ] Strona transrec.app z zakupem
