@@ -1,6 +1,7 @@
 """First-run setup wizard."""
 
 import rumps
+import threading
 from enum import Enum, auto
 from typing import Optional
 
@@ -46,6 +47,10 @@ class SetupWizard:
             progress_callback=self._on_progress
         )
         self._download_status = ""
+        self._download_in_progress = False
+        self._download_error: Optional[Exception] = None
+        self._download_complete = False
+        self._wizard_completed = False
 
     @staticmethod
     def needs_setup() -> bool:
@@ -61,24 +66,40 @@ class SetupWizard:
     def run(self) -> bool:
         """Uruchom wizard. Zwraca True jeśli ukończony pomyślnie."""
         logger.info("Uruchamianie Setup Wizard")
+        
+        self._wizard_completed = False
+        
+        # Uruchom pierwszy krok - wizard działa synchronicznie
+        # Każdy krok blokuje do zakończenia (włącznie z pobieraniem)
+        self._process_wizard_step()
+        
+        return self._wizard_completed
 
-        while self.current_step != WizardStep.FINISH:
-            result = self._run_current_step()
+    def _process_wizard_step(self):
+        """Przetwórz aktualny krok wizarda."""
+        if self.current_step == WizardStep.FINISH:
+            # Finalizacja
+            self._show_finish()
+            self.settings.setup_completed = True
+            self.settings.save()
+            logger.info("Setup Wizard zakończony pomyślnie")
+            self._wizard_completed = True
+            return
+        
+        result = self._run_current_step()
 
-            if result == "cancel":
-                logger.info("Wizard anulowany przez użytkownika")
-                return False
-            elif result == "back" and self.current_step_index > 0:
-                self.current_step_index -= 1
-            elif result == "next":
-                self.current_step_index += 1
-
-        # Finalizacja
-        self._show_finish()
-        self.settings.setup_completed = True
-        self.settings.save()
-        logger.info("Setup Wizard zakończony pomyślnie")
-        return True
+        if result == "cancel":
+            logger.info("Wizard anulowany przez użytkownika")
+            self._wizard_completed = False
+            return
+        elif result == "back" and self.current_step_index > 0:
+            self.current_step_index -= 1
+            # Kontynuuj natychmiast (synchronicznie)
+            self._process_wizard_step()
+        elif result == "next":
+            self.current_step_index += 1
+            # Kontynuuj natychmiast (synchronicznie)
+            self._process_wizard_step()
 
     def _run_current_step(self) -> str:
         """Wykonaj aktualny krok."""
@@ -97,9 +118,18 @@ class SetupWizard:
         return "next"
 
     def _on_progress(self, name: str, progress: float):
-        """Callback postępu pobierania."""
+        """Callback postępu pobierania - wywoływany z wątku pobierania."""
         self._download_status = f"{name}: {int(progress * 100)}%"
         logger.debug(f"Pobieranie: {self._download_status}")
+        
+        # Wyślij notyfikację co 10% postępu
+        percent = int(progress * 100)
+        if percent % 10 == 0 or percent == 100:
+            rumps.notification(
+                title="Transrec - Pobieranie",
+                subtitle=f"{name}",
+                message=f"Postęp: {percent}%"
+            )
 
     def _show_welcome(self) -> str:
         """Ekran powitalny."""
@@ -130,7 +160,8 @@ class SetupWizard:
                 "• whisper.cpp (~10MB)\n"
                 "• ffmpeg (~15MB)\n"
                 "• Model transkrypcji (~466MB)\n\n"
-                "Wymagane jest połączenie z internetem."
+                "Wymagane jest połączenie z internetem.\n\n"
+                "Pobieranie może potrwać kilka minut."
             ),
             ok="Pobierz teraz",
             cancel="Anuluj",
@@ -139,44 +170,90 @@ class SetupWizard:
         if response != 1:
             return "cancel"
 
-        # Wykonaj pobieranie
-        try:
-            self.downloader.download_all()
+        # Resetuj flagi
+        self._download_in_progress = True
+        self._download_complete = False
+        self._download_error = None
+        self._download_status = "Rozpoczynanie..."
+
+        # Uruchom pobieranie w osobnym wątku
+        download_thread = threading.Thread(
+            target=self._download_in_background,
+            daemon=True,
+            name="WizardDownload"
+        )
+        download_thread.start()
+
+        # Pokaż okno z informacją o pobieraniu (blokuje UI aż do zakończenia)
+        # Używamy pętli z alertami co kilka sekund aby informować o postępie
+        import time
+        while self._download_in_progress:
+            # Pokaż aktualny status
+            response = rumps.alert(
+                title="⏳ Pobieranie w toku...",
+                message=(
+                    f"Status: {self._download_status}\n\n"
+                    "Proszę czekać, pobieranie może potrwać kilka minut.\n"
+                    "Nie zamykaj tego okna."
+                ),
+                ok="Sprawdź status",
+                cancel=None,  # Brak przycisku anuluj - nie można przerwać
+            )
+            # Krótka pauza przed kolejnym sprawdzeniem
+            time.sleep(2)
+
+        # Pobieranie zakończone - sprawdź wynik
+        if self._download_error:
+            error_msg = str(self._download_error)
+            if isinstance(self._download_error, NetworkError):
+                rumps.alert(
+                    title="❌ Brak połączenia",
+                    message=f"Brak połączenia z internetem:\n\n{error_msg}",
+                    ok="OK",
+                )
+            elif isinstance(self._download_error, DiskSpaceError):
+                rumps.alert(
+                    title="❌ Brak miejsca",
+                    message=f"Brak miejsca na dysku:\n\n{error_msg}",
+                    ok="OK",
+                )
+            elif isinstance(self._download_error, DownloadError):
+                rumps.alert(
+                    title="❌ Błąd pobierania",
+                    message=f"Nie udało się pobrać zależności:\n\n{error_msg}",
+                    ok="OK",
+                )
+            else:
+                rumps.alert(
+                    title="❌ Błąd",
+                    message=f"Nieoczekiwany błąd:\n\n{error_msg}",
+                    ok="OK",
+                )
+            return "cancel"
+
+        if self._download_complete:
             rumps.alert(
                 title="✅ Pobrano",
                 message="Silnik transkrypcji został pobrany pomyślnie.",
                 ok="Dalej",
             )
             return "next"
-        except NetworkError as e:
-            rumps.alert(
-                title="❌ Brak połączenia",
-                message=f"Brak połączenia z internetem:\n\n{str(e)}",
-                ok="OK",
-            )
-            return "cancel"
-        except DiskSpaceError as e:
-            rumps.alert(
-                title="❌ Brak miejsca",
-                message=f"Brak miejsca na dysku:\n\n{str(e)}",
-                ok="OK",
-            )
-            return "cancel"
-        except DownloadError as e:
-            rumps.alert(
-                title="❌ Błąd pobierania",
-                message=f"Nie udało się pobrać zależności:\n\n{str(e)}",
-                ok="OK",
-            )
-            return "cancel"
+
+        # Nieoczekiwany stan
+        return "cancel"
+
+    def _download_in_background(self):
+        """Wykonaj pobieranie w tle (w osobnym wątku)."""
+        try:
+            logger.info("Rozpoczęto pobieranie zależności w tle")
+            self.downloader.download_all()
+            self._download_complete = True
+            logger.info("✓ Pobieranie zakończone pomyślnie")
         except Exception as e:
-            logger.error(f"Nieoczekiwany błąd podczas pobierania: {e}", exc_info=True)
-            rumps.alert(
-                title="❌ Błąd",
-                message=f"Nieoczekiwany błąd:\n\n{str(e)}",
-                ok="OK",
-            )
-            return "cancel"
+            logger.error(f"Błąd podczas pobierania: {e}", exc_info=True)
+            self._download_error = e
+        finally:
+            self._download_in_progress = False
 
     def _show_permissions(self) -> str:
         """Instrukcje Full Disk Access - skip jeśli już nadane."""

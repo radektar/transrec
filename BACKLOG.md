@@ -34,11 +34,14 @@
 #### v2.0.0 FREE (~5 tygodni)
 - [x] **Faza 1:** Uniwersalne źródła nagrań (nie tylko Olympus LS-P1) ✅ *COMPLETED*
 - [x] **Faza 2:** System pobierania whisper.cpp/modeli on-demand ✅ *COMPLETED - GitHub Release deps-v1.0.0 działa*
-- [ ] **Faza 3:** First-run wizard z konfiguracją
-- [ ] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller)
+- [x] **Faza 3:** First-run wizard z konfiguracją ✅ *COMPLETED - testy manualne zakończone*
+- [x] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller) ✅ *COMPLETED - bundle działa, wymaga optymalizacji rozmiaru (43MB > 20MB)*
 - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
 - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
 - [ ] **Faza 7:** GUI Settings & polish
+  - [ ] Date picker dla "Resetuj pamięć od..." (zamiast prostego dialogu z 7 dniami)
+  - [ ] Przycisk "Anuluj" w każdym kroku wizarda (oprócz pobierania, gdzie już działa)
+  - [ ] **KRYTYCZNE:** Naprawa blokowania UI podczas pobierania zależności - przenieść pobieranie do osobnego wątku z progress dialogiem
 - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
 
 #### v2.1.0 PRO (~3 tygodnie po FREE)
@@ -248,7 +251,64 @@ def _show_language(self) -> str:
 
 ---
 
-## 4. Stabilizacja lub wyłączenie Core ML
+## 4. Optymalizacja rozmiaru bundle py2app
+
+### 4.1. Problem
+
+Po Fazie 4 bundle `.app` ma rozmiar **43MB**, podczas gdy cel to **<20MB** (bez modeli whisper). Większy rozmiar wydłuża czas pobierania i zajmuje więcej miejsca na dysku użytkownika.
+
+### 4.2. Analiza rozmiaru
+
+**Obecny stan:**
+- Bundle: 43MB
+- Cel: <20MB
+- Różnica: +23MB do zoptymalizowania
+
+**Główne komponenty bundle:**
+- Python runtime (~15-20MB)
+- Pakiety Python (rumps, anthropic, mutagen, httpx, etc.)
+- PyObjC frameworks (Cocoa, FSEvents)
+- MacFSEvents wrapper
+
+### 4.3. Strategia optymalizacji
+
+**Opcje do rozważenia:**
+
+1. **Agresywniejsze excludes:**
+   - Sprawdzić które pakiety są faktycznie importowane
+   - Usunąć nieużywane moduły z PyObjC
+   - Wykluczyć niepotrzebne części bibliotek
+
+2. **Użycie `--optimize=2` w py2app:**
+   - Bytecode optimization (już włączone)
+   - Możliwe dalsze optymalizacje
+
+3. **Analiza zależności:**
+   - Sprawdzić które moduły są faktycznie używane
+   - Użyć `py2app` z opcją `--analyze` do analizy importów
+   - Usunąć nieużywane zależności z `requirements.txt` jeśli możliwe
+
+4. **Alternatywne podejście:**
+   - Rozważyć użycie `pyinstaller` zamiast `py2app` (może być mniejsze)
+   - Lub użycie `cx_Freeze` (mniej popularne, ale może być lżejsze)
+
+### 4.4. Zadania
+
+- [ ] Przeanalizować rozmiar komponentów bundle (`du -sh dist/Transrec.app/Contents/Resources/*`)
+- [ ] Zidentyfikować największe pakiety
+- [ ] Sprawdzić które moduły PyObjC są faktycznie używane
+- [ ] Dodać agresywniejsze excludes w `setup_app.py`
+- [ ] Przetestować build po optymalizacji
+- [ ] Sprawdzić czy wszystkie funkcje działają po optymalizacji
+- [ ] Cel: zmniejszyć rozmiar do <20MB
+
+### 4.5. Priorytet
+
+**Średni** - Bundle działa poprawnie, optymalizacja może być wykonana przed Fazą 6 (DMG Release) lub później jako poprawka.
+
+---
+
+## 5. Stabilizacja lub wyłączenie Core ML
 
 ### 4.1. Konfigurowalny tryb Core ML / CPU
 
