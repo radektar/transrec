@@ -1,8 +1,8 @@
 # Manual Testing - Faza 7: GUI Settings & Polish
 
-**Data:** 2025-01-XX  
+**Data:** 2025-12-29  
 **Wersja:** v2.0.0  
-**Tester:** [Nazwa testera]
+**Tester:** Manual testing completed
 
 ---
 
@@ -10,15 +10,15 @@
 
 | ID | Test | Kryteria akceptacji | Status | Uwagi |
 |----|------|---------------------|--------|-------|
-| M7.1 | Date picker - 7 dni | Reset do 7 dni działa | [ ] | |
-| M7.2 | Date picker - 30 dni | Reset do 30 dni działa | [ ] | |
-| M7.3 | Date picker - custom | Input YYYY-MM-DD działa | [ ] | |
-| M7.4 | Date picker - błędna data | Pokazuje komunikat błędu | [ ] | |
-| M7.5 | Folder picker - NSOpenPanel | Otwiera dialog systemowy | [ ] | |
-| M7.6 | Folder picker - wybór | Zapisuje wybraną ścieżkę | [ ] | |
-| M7.7 | Folder picker - anuluj | Wraca do poprzedniego kroku | [ ] | |
-| M7.8 | About dialog | Pokazuje wersję i linki | [ ] | |
-| M7.9 | About dialog - zamknięcie | OK zamyka dialog | [ ] | |
+| M7.1 | Date picker - 7 dni | Reset do 7 dni działa | [x] | PASS - Notyfikacja działa po poprawce |
+| M7.2 | Date picker - 30 dni | Reset do 30 dni działa | [x] | PASS - Poprawka response=-1 dla przycisku "other" |
+| M7.3 | Date picker - custom | Input YYYY-MM-DD działa | [x] | PASS |
+| M7.4 | Date picker - błędna data | Pokazuje komunikat błędu | [x] | PASS |
+| M7.5 | Folder picker - NSOpenPanel | Otwiera dialog systemowy | [x] | PASS |
+| M7.6 | Folder picker - wybór | Zapisuje wybraną ścieżkę | [x] | PASS |
+| M7.7 | Folder picker - anuluj | Wraca do poprzedniego kroku | [x] | PASS |
+| M7.8 | About dialog | Pokazuje wersję i linki | [x] | PASS |
+| M7.9 | About dialog - zamknięcie | OK zamyka dialog | [x] | PASS |
 
 ---
 
@@ -49,7 +49,9 @@
 - Pamięć zostaje zresetowana do daty sprzed 7 dni
 - Pojawia się notyfikacja z potwierdzeniem
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
+
+**Uwagi:** Notyfikacja działa poprawnie po zmianie z `rumps.notification()` na `send_notification()` (osascript)
 
 ---
 
@@ -64,7 +66,9 @@
 - Pamięć zostaje zresetowana do daty sprzed 30 dni
 - Pojawia się notyfikacja z potwierdzeniem
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
+
+**Uwagi:** Poprawka - `rumps.alert()` zwraca `-1` dla przycisku "other", nie `2`
 
 ---
 
@@ -81,7 +85,7 @@
 - Pamięć zostaje zresetowana do podanej daty
 - Pojawia się notyfikacja z potwierdzeniem
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
 
 ---
 
@@ -98,7 +102,7 @@
 - Pojawia się komunikat błędu o nieprawidłowym formacie daty
 - Pamięć nie zostaje zresetowana
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
 
 ---
 
@@ -113,7 +117,7 @@
 - Otwiera się natywny dialog macOS do wyboru folderu
 - Dialog pozwala na przeglądanie folderów
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
 
 ---
 
@@ -127,7 +131,7 @@
 - Wybrana ścieżka zostaje zapisana w ustawieniach
 - Wizard przechodzi do następnego kroku
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
 
 ---
 
@@ -141,7 +145,7 @@
 - Wizard wraca do poprzedniego kroku
 - Ustawienia nie zostają zmienione
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
 
 ---
 
@@ -159,7 +163,7 @@
   - Link do GitHub: https://github.com/radektar/transrec
   - Informację o licencji: "Open Source (MIT)"
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
 
 ---
 
@@ -173,14 +177,14 @@
 - Dialog zamyka się
 - Aplikacja działa normalnie
 
-**Status:** [ ] PASS / [ ] FAIL
+**Status:** [x] PASS / [ ] FAIL
 
 ---
 
 ## Podsumowanie
 
-- **Testy wykonane:** 0/9
-- **Testy przechodzące:** 0/9
+- **Testy wykonane:** 9/9
+- **Testy przechodzące:** 9/9
 - **Testy nieprzechodzące:** 0/9
 
 ## Uwagi ogólne
@@ -191,7 +195,14 @@
 
 ## Następne kroki
 
-- [ ] Wszystkie testy przechodzą
-- [ ] Zgłoszone błędy naprawione
+- [x] Wszystkie testy przechodzą ✅
+- [x] Zgłoszone błędy naprawione ✅
+  - Naprawiono notyfikacje (zmiana z rumps.notification na send_notification)
+  - Naprawiono obsługę przycisku "other" w date picker (response=-1 zamiast 2)
 - [ ] Dokumentacja zaktualizowana
+
+## Dodatkowe poprawki zaimplementowane podczas testów
+
+- ✅ Dodano opcję "Anuluj" w każdym kroku wizarda (oprócz download)
+- ✅ Zaimplementowano dropdown wyboru języka z NSPopUpButton zamiast tekstowego inputu
 

@@ -45,6 +45,10 @@ def choose_date_dialog(default_days: int = 7) -> Optional[datetime]:
     Returns:
         Selected datetime or None if cancelled
     """
+    from src.logger import logger
+    
+    # Use alert with three buttons - ok, cancel, other
+    # rumps.alert returns: 1 for ok, 0 for cancel, 2 for other (if other is provided)
     response = rumps.alert(
         title=TEXTS["reset_memory_title"],
         message=TEXTS["reset_memory_message"],
@@ -53,11 +57,16 @@ def choose_date_dialog(default_days: int = 7) -> Optional[datetime]:
         other=TEXTS["reset_memory_30days"],
     )
     
-    if response == 1:  # 7 days
+    logger.info(f"Date dialog response: {response} (type: {type(response)})")
+    
+    if response == 1:  # 7 days (ok button)
+        logger.info("Selected: 7 days")
         return datetime.now() - timedelta(days=7)
-    elif response == 2:  # 30 days (other)
+    elif response == -1:  # 30 days (other button) - rumps returns -1 for "other"
+        logger.info("Selected: 30 days")
         return datetime.now() - timedelta(days=30)
-    elif response == 0:  # Custom date
+    elif response == 0:  # Custom date (cancel button)
+        logger.info("Selected: Custom date")
         # Show input dialog
         default_date = (datetime.now() - timedelta(days=default_days)).strftime("%Y-%m-%d")
         window = rumps.Window(
