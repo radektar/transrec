@@ -35,6 +35,9 @@ from src.app_core import OlympusTranscriber
 from src.app_status import AppStatus
 from src.state_manager import reset_state
 from src.transcriber import send_notification
+from src.setup.downloader import DependencyDownloader
+from src.setup.errors import NetworkError, DiskSpaceError, DownloadError
+from src.setup import SetupWizard
 
 
 class OlympusMenuApp(rumps.App):
@@ -92,12 +95,153 @@ class OlympusMenuApp(rumps.App):
         
         # Start retranscribe menu refresh timer
         rumps.Timer(self._refresh_retranscribe_menu, 10).start()  # Update every 10 seconds
+        
+        # Check if wizard is needed (first run)
+        self._dependencies_checked = False
+        if SetupWizard.needs_setup():
+            # Wizard will handle dependencies
+            self._dependencies_checked = True
+            rumps.Timer(self._run_wizard_if_needed, 0.5).start()
+        else:
+            # Normal start - check dependencies
+            rumps.Timer(self._delayed_check_dependencies, 1).start()
+
+    def _run_wizard_if_needed(self, timer):
+        """Uruchom wizard jeśli to pierwsze uruchomienie."""
+        timer.stop()
+        logger.info("Uruchamianie Setup Wizard...")
+        wizard = SetupWizard()
+        if wizard.run():
+            # Wizard zakończony pomyślnie - start transcribera
+            logger.info("Wizard zakończony - uruchamiam transcriber")
+            self._start_daemon()
+        else:
+            # Użytkownik anulował
+            self.status_item.title = "Status: Wymagana konfiguracja"
+            rumps.alert(
+                title="Konfiguracja niekompletna",
+                message=(
+                    "Transrec wymaga konfiguracji do działania.\n\n"
+                    "Uruchom aplikację ponownie, aby dokończyć konfigurację."
+                ),
+                ok="OK",
+            )
+
+    def _delayed_check_dependencies(self, timer):
+        """Sprawdź zależności po uruchomieniu aplikacji (z opóźnieniem)."""
+        # Stop timer after first call
+        timer.stop()
+        
+        if self._dependencies_checked:
+            return
+        
+        self._dependencies_checked = True
+        self._check_dependencies()
+
+    def _check_dependencies(self):
+        """Sprawdź czy wszystkie zależności są zainstalowane."""
+        try:
+            downloader = DependencyDownloader()
+            if downloader.check_all():
+                logger.info("✓ Wszystkie zależności zainstalowane")
+                return True
+            
+            # Brakuje zależności - pokaż komunikat
+            logger.warning("Brakuje zależności - wymagane pobranie")
+            response = rumps.alert(
+                title="📥 Pobieranie zależności",
+                message=(
+                    "Transrec wymaga pobrania silnika transkrypcji (~500MB).\n\n"
+                    "Czy chcesz pobrać teraz?\n\n"
+                    "Wymagane:\n"
+                    "• whisper.cpp (~10MB)\n"
+                    "• ffmpeg (~15MB)\n"
+                    "• Model transkrypcji (~466MB)"
+                ),
+                ok="Pobierz teraz",
+                cancel="Pomiń"
+            )
+            
+            if response == 1:  # OK clicked
+                self._download_dependencies()
+            else:
+                logger.info("Użytkownik pominął pobieranie zależności")
+                self.status_item.title = "Status: Wymagane pobranie zależności"
+            
+            return False
+            
+        except (NetworkError, DiskSpaceError, DownloadError) as e:
+            logger.error(f"Błąd podczas sprawdzania zależności: {e}")
+            rumps.alert(
+                title="⚠️ Błąd",
+                message=f"Nie można pobrać zależności:\n\n{str(e)}",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Błąd pobierania zależności"
+            return False
+        except Exception as e:
+            logger.error(f"Nieoczekiwany błąd: {e}", exc_info=True)
+            return False
+    
+    def _download_dependencies(self):
+        """Pobierz wszystkie brakujące zależności z progress callback."""
+        def progress_callback(name: str, progress: float):
+            """Update status z postępem pobierania."""
+            percent = int(progress * 100)
+            self.status_item.title = f"Status: Pobieranie {name}... {percent}%"
+            logger.debug(f"Pobieranie {name}: {percent}%")
+        
+        try:
+            downloader = DependencyDownloader(progress_callback=progress_callback)
+            downloader.download_all()
+            
+            logger.info("✓ Wszystkie zależności pobrane")
+            rumps.alert(
+                title="✅ Gotowe",
+                message="Wszystkie zależności zostały pobrane.\n\nAplikacja jest gotowa do użycia.",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Gotowe"
+            
+        except NetworkError as e:
+            logger.error(f"Brak połączenia: {e}")
+            rumps.alert(
+                title="⚠️ Brak połączenia",
+                message=(
+                    "Brak połączenia z internetem.\n\n"
+                    "Transrec wymaga jednorazowego pobrania silnika transkrypcji (~500MB).\n"
+                    "Połącz się z internetem i spróbuj ponownie."
+                ),
+                ok="OK"
+            )
+            self.status_item.title = "Status: Brak połączenia"
+        except DiskSpaceError as e:
+            logger.error(f"Brak miejsca: {e}")
+            rumps.alert(
+                title="⚠️ Brak miejsca",
+                message=str(e),
+                ok="OK"
+            )
+            self.status_item.title = "Status: Brak miejsca"
+        except DownloadError as e:
+            logger.error(f"Błąd pobierania: {e}")
+            rumps.alert(
+                title="⚠️ Błąd pobierania",
+                message=f"Nie udało się pobrać zależności:\n\n{str(e)}\n\nSpróbuj ponownie później.",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Błąd pobierania"
+        except Exception as e:
+            logger.error(f"Nieoczekiwany błąd: {e}", exc_info=True)
+            rumps.alert(
+                title="⚠️ Błąd",
+                message=f"Nieoczekiwany błąd:\n\n{str(e)}",
+                ok="OK"
+            )
+            self.status_item.title = "Status: Błąd"
 
     def _update_status(self, _):
         """Update status menu item based on current state."""
-        # #region agent log
-        import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:95", "message": "_update_status called", "data": {"transcriber_exists": self.transcriber is not None, "retranscription_in_progress": self._retranscription_in_progress, "retranscription_file": self._retranscription_file}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + '\n')
-        # #endregion
         if not self.transcriber:
             self.status_item.title = "Status: Nie uruchomiono"
             return
@@ -106,9 +250,6 @@ class OlympusMenuApp(rumps.App):
         if self._retranscription_in_progress:
             filename = self._retranscription_file or "..."
             self.status_item.title = f"Status: Retranskrybowanie {filename}"
-            # #region agent log
-            import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:105", "message": "Status set to retranscribing", "data": {"status_title": self.status_item.title, "filename": filename}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "A"}) + '\n')
-            # #endregion
             return
 
         state = self.transcriber.state
@@ -287,9 +428,6 @@ class OlympusMenuApp(rumps.App):
         # Set flag BEFORE starting thread
         self._retranscription_in_progress = True
         self._retranscription_file = audio_path.name
-        # #region agent log
-        import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:281", "message": "Retranscription flags set", "data": {"flag": self._retranscription_in_progress, "file": self._retranscription_file}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + '\n')
-        # #endregion
         
         # Send start notification
         send_notification(
@@ -300,44 +438,23 @@ class OlympusMenuApp(rumps.App):
         
         # Run retranscription in background thread
         def do_retranscribe():
-            # #region agent log
-            import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:293", "message": "Thread started", "data": {"transcriber_exists": self.transcriber is not None, "transcriber.transcriber_exists": self.transcriber.transcriber is not None if self.transcriber else False, "audio_path": str(audio_path)}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B,C"}) + '\n')
-            # #endregion
             try:
                 if self.transcriber and self.transcriber.transcriber:
-                    # #region agent log
-                    import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:295", "message": "Calling force_retranscribe", "data": {"audio_path": str(audio_path)}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "C"}) + '\n')
-                    # #endregion
                     success = self.transcriber.transcriber.force_retranscribe(audio_path)
-                    # #region agent log
-                    import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:297", "message": "force_retranscribe returned", "data": {"success": success}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B,C"}) + '\n')
-                    # #endregion
                     
                     if success:
-                        # #region agent log
-                        import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:315", "message": "Sending success notification", "data": {"audio_path": str(audio_path)}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run2", "hypothesisId": "FIX"}) + '\n')
-                        # #endregion
                         send_notification(
                             title="Olympus Transcriber",
                             subtitle="Retranskrypcja zakończona",
                             message=f"Plik: {audio_path.name}"
                         )
-                        # #region agent log
-                        import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:322", "message": "Success notification sent", "data": {}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run2", "hypothesisId": "FIX"}) + '\n')
-                        # #endregion
                     else:
-                        # #region agent log
-                        import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:324", "message": "Sending failure notification", "data": {"audio_path": str(audio_path)}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run2", "hypothesisId": "FIX"}) + '\n')
-                        # #endregion
                         send_notification(
                             title="Olympus Transcriber",
                             subtitle="Retranskrypcja nieudana",
                             message=f"Sprawdź logi: {audio_path.name}"
                         )
             except Exception as e:
-                # #region agent log
-                import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:309", "message": "Exception in thread", "data": {"error": str(e)}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B"}) + '\n')
-                # #endregion
                 logger.error(f"Retranscribe error: {e}", exc_info=True)
                 send_notification(
                     title="Olympus Transcriber",
@@ -346,9 +463,6 @@ class OlympusMenuApp(rumps.App):
                 )
             finally:
                 # Always clear flag when done
-                # #region agent log
-                import json; import datetime; log_path = "/Users/radoslawtaraszka/CODE/Olympus_transcription/.cursor/debug.log"; open(log_path, 'a').write(json.dumps({"location": "menu_app.py:318", "message": "Clearing retranscription flags in finally", "data": {"was_in_progress": self._retranscription_in_progress}, "timestamp": datetime.datetime.now().timestamp() * 1000, "sessionId": "debug-session", "runId": "run1", "hypothesisId": "B,E"}) + '\n')
-                # #endregion
                 self._retranscription_in_progress = False
                 self._retranscription_file = None
         
@@ -394,13 +508,12 @@ class OlympusMenuApp(rumps.App):
                 message=f"Błąd uruchomienia: {e}"
             )
 
-    def run(self):
-        """Start the menu bar application."""
-        logger.info("=" * 60)
-        logger.info("🚀 Olympus Transcriber Menu App starting...")
-        logger.info("=" * 60)
-
-        # Start daemon in background thread
+    def _start_daemon(self):
+        """Uruchom daemon transcribera w tle."""
+        if self._running:
+            return  # Already running
+        
+        logger.info("Uruchamianie daemona transcribera...")
         self._running = True
         self.daemon_thread = threading.Thread(
             target=self._run_daemon,
@@ -408,6 +521,16 @@ class OlympusMenuApp(rumps.App):
             name="TranscriberDaemon"
         )
         self.daemon_thread.start()
+
+    def run(self):
+        """Start the menu bar application."""
+        logger.info("=" * 60)
+        logger.info("🚀 Olympus Transcriber Menu App starting...")
+        logger.info("=" * 60)
+
+        # If wizard is not needed, start daemon immediately
+        if not SetupWizard.needs_setup():
+            self._start_daemon()
 
         # Run menu app (blocks until quit)
         super(OlympusMenuApp, self).run()

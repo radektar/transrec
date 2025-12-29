@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### In Progress
 - **🚀 Dystrybucja Publiczna (v2.0.0 FREE)** - Szczegółowy plan w [`Docs/PUBLIC-DISTRIBUTION-PLAN.md`](Docs/PUBLIC-DISTRIBUTION-PLAN.md)
   - ✅ **Faza 1:** Uniwersalne źródła nagrań (testy integracyjne zakończone, testy manualne wymagane)
-  - [ ] **Faza 2:** System pobierania whisper.cpp/modeli on-demand
-  - [ ] **Faza 3:** First-run wizard z konfiguracją
+  - ✅ **Faza 2:** System pobierania whisper.cpp/modeli on-demand (COMPLETED)
+  - ✅ **Faza 3:** First-run wizard z konfiguracją (COMPLETED ✅ - testy manualne zakończone)
   - [ ] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller)
   - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
   - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
@@ -24,36 +24,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [Unreleased] - Faza 3 COMPLETED ✅
 
-### Added (v2.0.0 WIP - Faza 1)
-- **Testy integracyjne dla symulowanych volumów** (`tests/test_file_monitor_integration.py`)
-  - 11 testów pokrywających scenariusze z MANUAL_TESTING_PHASE_1.md
-  - Testy dla watch modes: auto, specific, manual
-  - Testy dla różnych formatów audio (mp3, wav, m4a, flac, aac, ogg)
-  - Testy dla volumów systemowych, pustych volumów, wielu volumów
-  - Testy debouncing i zagnieżdżonych katalogów
-  - Testy kompatybilności z legacy Olympus LS-P1
-  - Helper function `_setup_file_monitor_mocks()` do konfiguracji mocków z rozwiązaniem circular imports
+### Added (v2.0.0 - Faza 3)
+- **First-Run Wizard** (`src/setup/wizard.py`)
+  - 8-krokowy wizard konfiguracji przy pierwszym uruchomieniu
+  - Automatyczne pobieranie zależności z progress bar (integracja z Fazą 2)
+  - Instrukcja Full Disk Access z linkiem do System Preferences
+  - Konfiguracja źródeł nagrań (auto/specific volumes)
+  - Wybór folderu docelowego na transkrypcje
+  - Wybór języka transkrypcji (pl, en, auto)
+  - Opcjonalna konfiguracja AI podsumowań (klucz API Claude)
+  - Nawigacja wstecz między krokami
+  - Anulowanie wizarda na dowolnym kroku
+- **System ustawień użytkownika** (`src/config/`)
+  - Klasa `UserSettings` z persystencją do JSON
+  - Domyślne wartości w `defaults.py` (języki, modele, ścieżki)
+  - Lokalizacja: `~/Library/Application Support/Transrec/config.json`
+  - Obsługa load/save z automatycznym tworzeniem katalogów
+- **Moduł uprawnień** (`src/setup/permissions.py`)
+  - Sprawdzanie Full Disk Access przez próbę dostępu do chronionych katalogów
+  - Automatyczne otwieranie System Preferences -> Privacy -> Full Disk Access
+  - Sprawdzanie dostępu do konkretnych volumów
 
-### Changed (v2.0.0 WIP - Faza 1)
-- **Dokumentacja testów manualnych** (`tests/MANUAL_TESTING_PHASE_1.md`)
-  - Dodano sekcję "Status testów" z podsumowaniem testów automatycznych
-  - Dodano notatkę o wymaganych testach manualnych przed produkcją
-  - Wyjaśniono różnicę między testami integracyjnymi a manualnymi
-- **BACKLOG.md** - Oznaczono Fazę 1 jako zakończoną z notatką o testach manualnych
-- **Docs/PUBLIC-DISTRIBUTION-PLAN.md** - Zaktualizowano checklist Fazy 1 z statusem testów
+### Changed (v2.0.0 - Faza 3)
+- **menu_app.py** - Integracja z wizardem przy starcie
+  - Sprawdzanie `SetupWizard.needs_setup()` przed uruchomieniem daemona
+  - Uruchamianie wizarda przy pierwszym starcie (z opóźnieniem dla GUI)
+  - Przeniesienie logiki pobierania zależności do wizarda (krok 2)
+  - Daemon uruchamia się dopiero po zakończeniu wizarda
+  - Obsługa anulowania wizarda z komunikatem dla użytkownika
 
-### Testing (v2.0.0 WIP - Faza 1)
-- ✅ Wszystkie testy integracyjne przechodzą (11/11, 100% pass rate)
-- ✅ Testy jednostkowe dla `UserSettings` i `FileMonitor` przechodzą
-- ✅ Pokrycie kodem: `src/file_monitor.py` - 66% coverage
-- ⚠️ **Testy manualne na fizycznych urządzeniach wymagane przed produkcją v2.0.0 FREE**
+### Testing (v2.0.0 - Faza 3)
+- ✅ Testy jednostkowe: test_user_settings.py (6 testów, 100% pass)
+- ✅ Testy jednostkowe: test_permissions.py (6 testów, 100% pass)
+- ✅ Testy jednostkowe: test_wizard.py (8 testów, 100% pass)
+- ✅ Testy manualne: MANUAL_TESTING_PHASE_3.md (10/16 kluczowych testów przeszło pomyślnie)
+  - Weryfikacja przepływu wizarda, integracji z menu_app, zapisywania konfiguracji
+  - Znalezione problemy UX zapisane w BACKLOG.md (nie blokują produkcji)
 
 ### Technical Details
-- Rozwiązano problem circular imports przez mockowanie `logger`/`config` przed importem `file_monitor`
-- Użyto `monkeypatch` zamiast `@patch` dla lepszej kontroli nad mockowaniem
-- Implementacja `callback_holder` pattern dla przechwytywania FSEvents callbacks w testach
+- Wizard pojawia się tylko gdy `setup_completed == false` w config.json
+- Po zakończeniu wizarda: `setup_completed = true` i wszystkie ustawienia zapisane
+- Wizard obsługuje skip kroków (pobieranie jeśli już pobrane, FDA jeśli już nadane)
+- Integracja z istniejącym `DependencyDownloader` z Fazy 2
+- Wszystkie dialogi używają `rumps.alert()` i `rumps.Window()` dla natywnego macOS UX
+
+---
+
+## [Unreleased] - Faza 2 COMPLETED ✅
+
+### Added (v2.0.0 - Faza 2 COMPLETED)
+- **Moduł pobierania zależności** (`src/setup/downloader.py`)
+  - Klasa `DependencyDownloader` z automatycznym pobieraniem whisper.cpp i ffmpeg
+  - Weryfikacja checksum SHA256 dla bezpieczeństwa
+  - Retry logic z exponential backoff (max 3 próby)
+  - Resume download dla przerwanych pobierań (Range header)
+  - Progress callback dla UI
+  - Obsługa błędów: brak internetu, brak miejsca, timeout, serwer niedostępny
+- **Custom exceptions** (`src/setup/errors.py`)
+  - `DownloadError`, `ChecksumError`, `NetworkError`, `DiskSpaceError`
+- **Konfiguracja checksums** (`src/setup/checksums.py`)
+  - Słowniki: `VERSIONS`, `CHECKSUMS`, `URLS`, `SIZES`
+- **Testy jednostkowe** (`tests/test_downloader.py`)
+  - 20 testów pokrywających wszystkie scenariusze (100% pass)
+  - Testy P0: sprawdzanie, checksum, network, disk space
+  - Testy P1: pobieranie, retry, progress callback
+  - Testy P2: resume download, cleanup temp files
+- **Testy integracyjne** (`tests/test_downloader_integration.py`)
+  - Podstawowa struktura (do rozbudowy po utworzeniu GitHub Release)
+
+### Changed (v2.0.0 - Faza 2 COMPLETED)
+- **src/config.py** - Nowa lokalizacja zależności
+  - `WHISPER_CPP_PATH` domyślnie: `~/Library/Application Support/Transrec/bin/whisper-cli`
+  - `WHISPER_CPP_MODELS_DIR` domyślnie: `~/Library/Application Support/Transrec/models/`
+  - Dodano `FFMPEG_PATH` dla bundlowanego ffmpeg
+  - Backward compatibility z `~/whisper.cpp/` dla developerów
+- **src/transcriber.py** - Zmiana `_check_whisper()`
+  - Zamiast błędu - warning i zwrócenie False (UI pokazuje ekran pobierania)
+  - Sprawdzanie nowej lokalizacji przed fallback do starej
+- **src/menu_app.py** - Integracja z downloaderem
+  - Metoda `_check_dependencies()` sprawdza zależności przy starcie (z opóźnieniem dla GUI)
+  - Metoda `_download_dependencies()` pobiera z progress callback
+  - Komunikaty błędów dla użytkownika (NetworkError, DiskSpaceError, DownloadError)
+  - Usunięto debug.log zapisy (11 miejsc)
+  - Zoptymalizowano progress callback (100x mniej wywołań)
+- **src/setup/downloader.py** - Weryfikacja checksum i auto-repair
+  - `check_all()` weryfikuje checksum dla wszystkich plików
+  - `download_whisper()`, `download_ffmpeg()`, `download_model()` auto-repair przy błędnym checksum
+  - Zoptymalizowano progress callback (tylko przy zmianie procentu, nie co 8KB)
+- **HTTP client** - Zmiana z urllib na httpx
+  - Lepsze wsparcie dla przekierowań GitHub
+  - Bardziej nowoczesne API
+  - Automatyczne follow_redirects
+
+### Testing (v2.0.0 - Faza 2 COMPLETED)
+- ✅ Wszystkie testy jednostkowe przechodzą (20/20, 100% pass rate)
+- ✅ Wszystkie testy integracyjne przechodzą (5/5, 100% pass rate)
+- ✅ GitHub Release deps-v1.0.0 utworzony i przetestowany
+- ✅ Pobieranie whisper-cli, ffmpeg i modelu small działa poprawnie
+- ✅ Weryfikacja checksums działa
+- ✅ Repo zmienione na publiczne dla FREE release
+- ✅ **Testy manualne Fazy 2 zakończone** (2025-12-26)
+  - ✅ TEST M1: Pierwsze uruchomienie - wszystkie zależności pobrane
+  - ✅ TEST M2: Brak internetu - komunikat błędu działa poprawnie
+  - ✅ TEST M3: Resume download - wznawianie pobierania działa
+  - ✅ TEST M5: Uszkodzony plik - wykrycie i auto-repair działa
+  - ⏳ TEST M4: Brak miejsca na dysku (opcjonalny, pominięty)
+  - ⏳ TEST M6: Wolne połączenie (opcjonalny, pominięty)
+
+### Technical Details
+- Lokalizacja zależności: `~/Library/Application Support/Transrec/`
+  - `bin/whisper-cli` (~10MB)
+  - `bin/ffmpeg` (~15MB)
+  - `models/ggml-small.bin` (~466MB)
+- Timeouty: CHUNK_TIMEOUT=30s, TOTAL_TIMEOUT=1800s (30min)
+- Max retries: 3 próby z exponential backoff
+- Minimalne miejsce na dysku: 500MB
+
+---
 
 ---
 
@@ -123,13 +212,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Wszystkie dokumenty zaktualizowane dla v2.0.0
 - Spójna struktura cross-references
 - Cursor rules z zasadami Git Flow i freemium
-- **Strategia testowania** - kompleksowa sekcja w PUBLIC-DISTRIBUTION-PLAN.md
-  - Testy per faza (Unit, Integration, E2E, Manual)
-  - Beta testing strategy
-  - Test environment matrix
-  - CI/CD automation
-  - Definition of Done dla v2.0.0 i v2.1.0
-- TESTING-GUIDE.md rozszerzony o testy v2.0.0
 
 ---
 

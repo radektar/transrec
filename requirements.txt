@@ -17,6 +17,9 @@ rumps>=0.4.0
 # LLM/Summarization
 anthropic>=0.8.0
 
+# HTTP client for downloads
+httpx>=0.27.0
+
 # Audio metadata
 mutagen>=1.47.0
 
