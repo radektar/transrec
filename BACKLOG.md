@@ -125,9 +125,132 @@ git checkout -b feature/faza-1-universal-sources
   - `open Transrec.app` nie pokazuje komunikatu o niekończącym się zadaniu Automatora.
   - Start z Login Items zachowuje się identycznie jak obecnie (transkrypcje działają).
 
-## 2. Stabilizacja lub wyłączenie Core ML
+## 2. Poprawka UX: Graficzny wybór folderu w wizardzie
 
-### 2.1. Konfigurowalny tryb Core ML / CPU
+### 2.1. Problem
+W kroku wyboru folderu docelowego (TEST M3.9) użytkownik może tylko wpisać ścieżkę ręcznie. Brak natywnego dialogu wyboru folderu to złe UX.
+
+### 2.2. Rozwiązanie
+Dodać przycisk "Wybierz folder..." który otworzy natywny dialog macOS (`NSOpenPanel` przez PyObjC).
+
+**Plik:** `src/setup/wizard.py` - metoda `_show_output_config()`
+
+```python
+from AppKit import NSOpenPanel, NSURL
+
+def _show_output_config(self) -> str:
+    """Konfiguracja folderu docelowego."""
+    # Najpierw pokaż dialog z opcją wyboru
+    response = rumps.alert(
+        title="📂 Folder na transkrypcje",
+        message=(
+            "Gdzie zapisywać pliki z transkrypcjami?\n\n"
+            "Domyślnie: folder Obsidian w iCloud"
+        ),
+        ok="Wybierz folder...",
+        cancel="Użyj domyślnego",
+    )
+    
+    if response == 1:  # Wybierz folder
+        folder_path = self._choose_folder_dialog()
+        if folder_path:
+            self.settings.output_dir = folder_path
+            return "next"
+        else:
+            return "back"  # Anulowano wybór
+    
+    # Użyj domyślnego lub pozwól edytować
+    window = rumps.Window(...)
+    # ... reszta kodu
+
+def _choose_folder_dialog(self) -> Optional[str]:
+    """Otwórz natywny dialog wyboru folderu."""
+    panel = NSOpenPanel.openPanel()
+    panel.setCanChooseFiles_(False)
+    panel.setCanChooseDirectories_(True)
+    panel.setAllowsMultipleSelection_(False)
+    panel.setTitle_("Wybierz folder na transkrypcje")
+    
+    if panel.runModal() == 1:  # NSModalResponseOK
+        url = panel.URLs()[0]
+        return url.path()
+    return None
+```
+
+### 2.3. Zadania
+- [ ] Dodać metodę `_choose_folder_dialog()` używającą NSOpenPanel
+- [ ] Zaktualizować `_show_output_config()` z opcją "Wybierz folder..."
+- [ ] Przetestować na macOS 12+
+- [ ] Zaktualizować TEST M3.9 w dokumentacji
+
+---
+
+## 3. Poprawka UX: Wybór języka w wizardzie
+
+### 3.1. Problem
+W kroku wyboru języka (TEST M3.10) użytkownik musi wpisać kod języka ręcznie (pl/en/auto). To złe UX:
+- Wymaga znajomości kodów ISO
+- Brak dropdown/select - lista jest tylko tekstowa w message
+- Nie jest jasne że to język domyślny (można zmienić później)
+- Whisper.cpp obsługuje tylko jeden język na raz, ale nie jest to wyjaśnione
+
+### 3.2. Rozwiązanie
+Użyć `NSPopUpButton` (dropdown) przez PyObjC z pełnymi nazwami języków.
+
+**Plik:** `src/setup/wizard.py` - metoda `_show_language()`
+
+```python
+from AppKit import NSAlert, NSPopUpButton, NSView, NSRect
+
+def _show_language(self) -> str:
+    """Konfiguracja języka transkrypcji z dropdown."""
+    alert = NSAlert.alloc().init()
+    alert.setMessageText_("🗣️ Język transkrypcji")
+    alert.setInformativeText_(
+        "Wybierz domyślny język dla wszystkich nagrań.\n\n"
+        "Możesz zmienić to później w Ustawieniach."
+    )
+    
+    # Utwórz dropdown
+    popup = NSPopUpButton.alloc().initWithFrame_(NSRect((0, 0), (200, 24)))
+    for code, name in SUPPORTED_LANGUAGES.items():
+        popup.addItemWithTitle_(f"{name} ({code})")
+    
+    # Ustaw aktualną wartość
+    current_idx = list(SUPPORTED_LANGUAGES.keys()).index(self.settings.language)
+    popup.selectItemAtIndex_(current_idx)
+    
+    # Dodaj do alertu
+    alert.setAccessoryView_(popup)
+    alert.addButtonWithTitle_("OK")
+    alert.addButtonWithTitle_("Wstecz")
+    
+    response = alert.runModal()
+    if response == 1000:  # OK
+        selected_idx = popup.indexOfSelectedItem()
+        selected_code = list(SUPPORTED_LANGUAGES.keys())[selected_idx]
+        self.settings.language = selected_code
+        return "next"
+    else:
+        return "back"
+```
+
+**Uwagi:**
+- Whisper.cpp obsługuje tylko jeden język na raz (flaga `-l`)
+- Opcja "auto" (automatyczne wykrywanie) jest najlepsza dla większości użytkowników
+- To język domyślny - można zmienić później w ustawieniach
+
+### 3.3. Zadania
+- [ ] Zaimplementować `_show_language()` z NSPopUpButton
+- [ ] Dodać wyjaśnienie że to język domyślny
+- [ ] Przetestować na macOS 12+
+- [ ] Zaktualizować TEST M3.10 w dokumentacji
+
+---
+
+## 4. Stabilizacja lub wyłączenie Core ML
+
+### 4.1. Konfigurowalny tryb Core ML / CPU
 
 - **Cel**: Mieć pełną kontrolę nad użyciem Core ML i możliwość jego wyłączenia.
 - **Zakres**:
@@ -141,7 +264,7 @@ git checkout -b feature/faza-1-universal-sources
   - Zmiana trybu nie wymaga zmian w kodzie – tylko konfiguracja.
   - Log jasno informuje, w jakim trybie działa transkrypcja.
 
-### 2.2. Automatyczne wykrywanie niestabilności Core ML
+### 4.2. Automatyczne wykrywanie niestabilności Core ML
 
 - **Cel**: Automatyczne przełączenie na CPU, gdy Core ML jest niestabilne.
 - **Zakres**:
@@ -152,7 +275,7 @@ git checkout -b feature/faza-1-universal-sources
       to automatycznie przełącz `WHISPER_COREML_MODE` na `off` (tylko CPU) do czasu restartu.
   - Wyraźny wpis w logu i (opcjonalnie) notyfikacja systemowa o przełączeniu trybu.
 
-### 2.3. Dokumentacja i domyślne ustawienia
+### 4.3. Dokumentacja i domyślne ustawienia
 
 - **Zakres**:
   - Zaktualizować:

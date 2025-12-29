@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### In Progress
 - **🚀 Dystrybucja Publiczna (v2.0.0 FREE)** - Szczegółowy plan w [`Docs/PUBLIC-DISTRIBUTION-PLAN.md`](Docs/PUBLIC-DISTRIBUTION-PLAN.md)
   - ✅ **Faza 1:** Uniwersalne źródła nagrań (testy integracyjne zakończone, testy manualne wymagane)
-  - 🚧 **Faza 2:** System pobierania whisper.cpp/modeli on-demand (WIP)
-  - [ ] **Faza 3:** First-run wizard z konfiguracją
+  - ✅ **Faza 2:** System pobierania whisper.cpp/modeli on-demand (COMPLETED)
+  - ✅ **Faza 3:** First-run wizard z konfiguracją (COMPLETED ✅ - testy manualne zakończone)
   - [ ] **Faza 4:** Pakowanie z py2app (zamiast PyInstaller)
   - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
   - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
@@ -21,6 +21,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned Features
 - **🔒 PRO Features (v2.1.0)** - AI summaries, auto-tagging, cloud sync
 - See `BACKLOG.md` for other upcoming features and improvements
+
+---
+
+## [Unreleased] - Faza 3 COMPLETED ✅
+
+### Added (v2.0.0 - Faza 3)
+- **First-Run Wizard** (`src/setup/wizard.py`)
+  - 8-krokowy wizard konfiguracji przy pierwszym uruchomieniu
+  - Automatyczne pobieranie zależności z progress bar (integracja z Fazą 2)
+  - Instrukcja Full Disk Access z linkiem do System Preferences
+  - Konfiguracja źródeł nagrań (auto/specific volumes)
+  - Wybór folderu docelowego na transkrypcje
+  - Wybór języka transkrypcji (pl, en, auto)
+  - Opcjonalna konfiguracja AI podsumowań (klucz API Claude)
+  - Nawigacja wstecz między krokami
+  - Anulowanie wizarda na dowolnym kroku
+- **System ustawień użytkownika** (`src/config/`)
+  - Klasa `UserSettings` z persystencją do JSON
+  - Domyślne wartości w `defaults.py` (języki, modele, ścieżki)
+  - Lokalizacja: `~/Library/Application Support/Transrec/config.json`
+  - Obsługa load/save z automatycznym tworzeniem katalogów
+- **Moduł uprawnień** (`src/setup/permissions.py`)
+  - Sprawdzanie Full Disk Access przez próbę dostępu do chronionych katalogów
+  - Automatyczne otwieranie System Preferences -> Privacy -> Full Disk Access
+  - Sprawdzanie dostępu do konkretnych volumów
+
+### Changed (v2.0.0 - Faza 3)
+- **menu_app.py** - Integracja z wizardem przy starcie
+  - Sprawdzanie `SetupWizard.needs_setup()` przed uruchomieniem daemona
+  - Uruchamianie wizarda przy pierwszym starcie (z opóźnieniem dla GUI)
+  - Przeniesienie logiki pobierania zależności do wizarda (krok 2)
+  - Daemon uruchamia się dopiero po zakończeniu wizarda
+  - Obsługa anulowania wizarda z komunikatem dla użytkownika
+
+### Testing (v2.0.0 - Faza 3)
+- ✅ Testy jednostkowe: test_user_settings.py (6 testów, 100% pass)
+- ✅ Testy jednostkowe: test_permissions.py (6 testów, 100% pass)
+- ✅ Testy jednostkowe: test_wizard.py (8 testów, 100% pass)
+- ✅ Testy manualne: MANUAL_TESTING_PHASE_3.md (10/16 kluczowych testów przeszło pomyślnie)
+  - Weryfikacja przepływu wizarda, integracji z menu_app, zapisywania konfiguracji
+  - Znalezione problemy UX zapisane w BACKLOG.md (nie blokują produkcji)
+
+### Technical Details
+- Wizard pojawia się tylko gdy `setup_completed == false` w config.json
+- Po zakończeniu wizarda: `setup_completed = true` i wszystkie ustawienia zapisane
+- Wizard obsługuje skip kroków (pobieranie jeśli już pobrane, FDA jeśli już nadane)
+- Integracja z istniejącym `DependencyDownloader` z Fazy 2
+- Wszystkie dialogi używają `rumps.alert()` i `rumps.Window()` dla natywnego macOS UX
 
 ---
 

@@ -37,6 +37,7 @@ from src.state_manager import reset_state
 from src.transcriber import send_notification
 from src.setup.downloader import DependencyDownloader
 from src.setup.errors import NetworkError, DiskSpaceError, DownloadError
+from src.setup import SetupWizard
 
 
 class OlympusMenuApp(rumps.App):
@@ -95,9 +96,36 @@ class OlympusMenuApp(rumps.App):
         # Start retranscribe menu refresh timer
         rumps.Timer(self._refresh_retranscribe_menu, 10).start()  # Update every 10 seconds
         
-        # Check dependencies after app starts (delay to allow menu bar to appear)
+        # Check if wizard is needed (first run)
         self._dependencies_checked = False
-        rumps.Timer(self._delayed_check_dependencies, 1).start()
+        if SetupWizard.needs_setup():
+            # Wizard will handle dependencies
+            self._dependencies_checked = True
+            rumps.Timer(self._run_wizard_if_needed, 0.5).start()
+        else:
+            # Normal start - check dependencies
+            rumps.Timer(self._delayed_check_dependencies, 1).start()
+
+    def _run_wizard_if_needed(self, timer):
+        """Uruchom wizard jeśli to pierwsze uruchomienie."""
+        timer.stop()
+        logger.info("Uruchamianie Setup Wizard...")
+        wizard = SetupWizard()
+        if wizard.run():
+            # Wizard zakończony pomyślnie - start transcribera
+            logger.info("Wizard zakończony - uruchamiam transcriber")
+            self._start_daemon()
+        else:
+            # Użytkownik anulował
+            self.status_item.title = "Status: Wymagana konfiguracja"
+            rumps.alert(
+                title="Konfiguracja niekompletna",
+                message=(
+                    "Transrec wymaga konfiguracji do działania.\n\n"
+                    "Uruchom aplikację ponownie, aby dokończyć konfigurację."
+                ),
+                ok="OK",
+            )
 
     def _delayed_check_dependencies(self, timer):
         """Sprawdź zależności po uruchomieniu aplikacji (z opóźnieniem)."""
@@ -480,13 +508,12 @@ class OlympusMenuApp(rumps.App):
                 message=f"Błąd uruchomienia: {e}"
             )
 
-    def run(self):
-        """Start the menu bar application."""
-        logger.info("=" * 60)
-        logger.info("🚀 Olympus Transcriber Menu App starting...")
-        logger.info("=" * 60)
-
-        # Start daemon in background thread
+    def _start_daemon(self):
+        """Uruchom daemon transcribera w tle."""
+        if self._running:
+            return  # Already running
+        
+        logger.info("Uruchamianie daemona transcribera...")
         self._running = True
         self.daemon_thread = threading.Thread(
             target=self._run_daemon,
@@ -494,6 +521,16 @@ class OlympusMenuApp(rumps.App):
             name="TranscriberDaemon"
         )
         self.daemon_thread.start()
+
+    def run(self):
+        """Start the menu bar application."""
+        logger.info("=" * 60)
+        logger.info("🚀 Olympus Transcriber Menu App starting...")
+        logger.info("=" * 60)
+
+        # If wizard is not needed, start daemon immediately
+        if not SetupWizard.needs_setup():
+            self._start_daemon()
 
         # Run menu app (blocks until quit)
         super(OlympusMenuApp, self).run()
