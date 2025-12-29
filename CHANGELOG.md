@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ✅ **Faza 4:** Pakowanie z py2app (COMPLETED ✅ - wszystkie testy przechodzą)
   - [ ] **Faza 5:** Code signing & notaryzacja ($99 Apple Developer)
   - [ ] **Faza 6:** Profesjonalny DMG & GitHub Release
-  - ✅ **Faza 7:** GUI Settings & polish (COMPLETED ✅ - testy automatyczne przechodzą, testy manualne wymagane)
+  - ✅ **Faza 7:** GUI Settings & polish (COMPLETED ✅ - wszystkie testy przechodzą, 9/9 manualnych)
+    - ✅ Okno ustawień aplikacji (zmiana folderu, języka, modelu po instalacji)
   - [ ] **Faza 8:** Infrastruktura Freemium (feature flags, placeholder PRO)
   - [ ] **Faza 9:** Pełny redesign UI (nowy instalator, menu, ikony, kolory)
 
@@ -25,7 +26,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.15.0] - 2025-01-XX
+## [1.15.1] - 2025-12-29
+
+### Added (Faza 7 - kontynuacja)
+- **Okno ustawień aplikacji** (`src/ui/settings_window.py`)
+  - Menu item "Ustawienia..." w menu bar app
+  - Możliwość zmiany folderu docelowego po instalacji (bez potrzeby usuwania config.json)
+  - Możliwość zmiany języka transkrypcji (dropdown NSPopUpButton)
+  - Możliwość zmiany modelu Whisper (dropdown NSPopUpButton)
+  - Pętla pozwalająca zmienić wiele ustawień w jednej sesji
+  - Automatyczny zapis zmian do `config.json`
+
+### Changed (Faza 7 - kontynuacja)
+- **src/menu_app.py** - dodano menu item "Ustawienia..."
+  - Nowa metoda `_show_settings()` wywołująca okno ustawień
+  - Pozycja menu przed "O aplikacji..."
+
+### Technical Details
+- Okno ustawień używa AppKit (NSAlert + NSPopUpButton) dla dropdownów
+- Fallback na tekstowy input gdy AppKit niedostępne
+- Reuse funkcji `choose_folder_dialog()` z modułu UI
+- Integracja z `UserSettings.save()` dla zapisu zmian
+
+---
+
+## [1.15.0] - 2025-12-29
 
 ### Added (Faza 7)
 - **Moduł UI** (`src/ui/`)
@@ -41,6 +66,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dialog "O aplikacji"**
   - Nowy MenuItem w menu aplikacji
   - Wyświetla wersję, linki do strony i GitHub, informacje o licencji
+- **Dropdown wyboru języka w wizardzie**
+  - NSPopUpButton z pełnymi nazwami języków zamiast tekstowego inputu
+  - Lepsze UX - nie wymaga znajomości kodów ISO
+- **Opcja "Anuluj" w każdym kroku wizarda**
+  - Możliwość zamknięcia wizarda z każdego kroku (oprócz download)
+  - Lepsze UX - użytkownik nie musi przechodzić przez wszystkie kroki
 - **Testy automatyczne** (`tests/test_ui_constants.py`, `tests/test_ui_dialogs.py`)
   - 18 testów jednostkowych (100% pass rate)
   - Coverage modułu UI: 94% (powyżej wymaganego 80%)
@@ -52,24 +83,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **src/menu_app.py** - użycie nowego modułu UI
   - Metoda `_reset_memory()` używa `choose_date_dialog()`
   - Dodana metoda `_show_about()` z dialogiem O aplikacji
-- **src/setup/wizard.py** - użycie folder pickera
+  - Naprawiono notyfikacje - zmiana z `rumps.notification()` na `send_notification()` (osascript)
+- **src/setup/wizard.py** - użycie folder pickera i poprawki UX
   - Metoda `_show_output_config()` używa `choose_folder_dialog()`
   - Dialog z opcjami: Wybierz folder / Użyj domyślnego / Wstecz
+  - Metoda `_show_language()` używa NSPopUpButton zamiast tekstowego inputu
+  - Dodano opcję "Anuluj" w każdym kroku wizarda (PERMISSIONS, SOURCE_CONFIG, OUTPUT_CONFIG, LANGUAGE, AI_CONFIG)
+- **src/ui/dialogs.py** - poprawki obsługi przycisków
+  - Naprawiono obsługę przycisku "other" w `choose_date_dialog()` - `response=-1` zamiast `2`
+  - Poprawiono kolejność parametrów w `send_notification()` (title, message, subtitle)
+
+### Fixed (Faza 7)
+- **Notyfikacje nie pojawiały się** - zmiana z `rumps.notification()` na `send_notification()` (osascript)
+- **Date picker "30 dni" nie działał** - naprawiono obsługę przycisku "other" (`response=-1` zamiast `2`)
+- **Brak możliwości zamknięcia wizarda** - dodano opcję "Anuluj" w każdym kroku
+- **Tekstowy input języka** - zastąpiono dropdownem z pełnymi nazwami języków
 
 ### Testing (Faza 7)
 - ✅ **Testy automatyczne:** 18/18 przechodzą (100% pass rate)
   - Testy stałych UI (9 testów)
   - Testy dialogów (9 testów)
   - Coverage: 94% dla modułu `src/ui/`
-- [ ] **Testy manualne:** 0/9 wykonane (wymagane przed produkcją)
-  - M7.1-M7.4: Date picker (różne opcje)
-  - M7.5-M7.7: Folder picker (NSOpenPanel)
-  - M7.8-M7.9: About dialog
+- ✅ **Testy manualne:** 9/9 wykonane (100% completion)
+  - ✅ M7.1: Date picker - 7 dni (PASS)
+  - ✅ M7.2: Date picker - 30 dni (PASS - po poprawce response=-1)
+  - ✅ M7.3: Date picker - custom data (PASS)
+  - ✅ M7.4: Date picker - błędna data (PASS)
+  - ✅ M7.5: Folder picker - NSOpenPanel (PASS)
+  - ✅ M7.6: Folder picker - wybór (PASS)
+  - ✅ M7.7: Folder picker - anuluj (PASS)
+  - ✅ M7.8: About dialog (PASS)
+  - ✅ M7.9: About dialog - zamknięcie (PASS)
 
 ### Technical Details
 - Nowy moduł: `src/ui/` przygotowany na przyszły redesign UI
 - Stałe UI w `constants.py` - łatwe do wymiany przy Fazie 9
 - Funkcje dialogów w `dialogs.py` - reusable i testowalne
+- Dropdown języka używa NSAlert z NSPopUpButton jako accessory view
+- Opcja "Anuluj" w wizardzie zwraca "cancel" i kończy konfigurację
 
 ---
 

@@ -40,8 +40,7 @@ from src.setup.errors import NetworkError, DiskSpaceError, DownloadError
 from src.setup import SetupWizard
 from src.ui.dialogs import choose_date_dialog, show_about_dialog
 from src.ui.constants import TEXTS
-from src.ui.dialogs import choose_date_dialog, show_about_dialog
-from src.ui.constants import TEXTS
+from src.ui.settings_window import show_settings_window
 
 
 class OlympusMenuApp(rumps.App):
@@ -87,6 +86,12 @@ class OlympusMenuApp(rumps.App):
         self.menu.add(self.retranscribe_menu)
 
         self.menu.add(rumps.separator)
+
+        self.settings_item = rumps.MenuItem(
+            "Ustawienia...",
+            callback=self._show_settings
+        )
+        self.menu.add(self.settings_item)
 
         self.about_item = rumps.MenuItem(
             "O aplikacji...",
@@ -308,22 +313,32 @@ class OlympusMenuApp(rumps.App):
         target_date = choose_date_dialog(default_days=7)
         
         if target_date is None:
+            logger.info("User cancelled reset memory dialog")
             return  # User cancelled
         
+        logger.info(f"Resetting memory to date: {target_date.strftime('%Y-%m-%d')}")
         success = reset_state(target_date)
 
         if success:
-            rumps.notification(
+            logger.info(f"Memory reset successful, sending notification for date: {target_date.strftime('%Y-%m-%d')}")
+            # Use send_notification instead of rumps.notification for better reliability
+            # Note: send_notification signature is (title, message, subtitle="")
+            send_notification(
                 title="Transrec",
-                subtitle=TEXTS["reset_memory_success"],
-                message=f"Od: {target_date.strftime('%Y-%m-%d')}"
+                message=f"Od: {target_date.strftime('%Y-%m-%d')}",
+                subtitle=TEXTS["reset_memory_success"]
             )
         else:
+            logger.error("Failed to reset memory state")
             rumps.alert(
                 "Błąd",
                 TEXTS["reset_memory_error"],
                 ok="OK"
             )
+
+    def _show_settings(self, _):
+        """Show settings window."""
+        show_settings_window()
 
     def _show_about(self, _):
         """Show About dialog with app information."""
