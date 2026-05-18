@@ -178,6 +178,13 @@ def _build_general_tab(view, state, delegate) -> None:
     pick_btn.setAction_("folderPickClicked:")
     view.addSubview_(pick_btn)
 
+    login_checkbox = NSButton.alloc().initWithFrame_(NSMakeRect(20, 170, 560, 22))
+    login_checkbox.setButtonType_(3)  # NSSwitchButton
+    login_checkbox.setTitle_("Launch Malinche automatically at login")
+    login_checkbox.setState_(1 if state.get("start_at_login") else 0)
+    view.addSubview_(login_checkbox)
+    state["start_at_login_checkbox"] = login_checkbox
+
     note = NSTextField.alloc().initWithFrame_(NSMakeRect(20, 60, 560, 60))
     note.setStringValue_(
         "UI language: English. Output transcripts and AI summaries are produced "
@@ -422,6 +429,7 @@ def _show_native_settings_window(
             else next(iter(SUPPORTED_MODELS))
         ),
         "original_api_key": settings.ai_api_key or "",
+        "start_at_login": bool(settings.start_at_login),
         "result_save": False,
     }
 
@@ -515,7 +523,28 @@ def _show_native_settings_window(
     api_key_changed = (settings.ai_api_key or None) != new_api_key
     if api_key_changed:
         settings.ai_api_key = new_api_key
-    return basic_changed or api_key_changed
+
+    new_start_at_login = bool(state["start_at_login_checkbox"].state())
+    start_at_login_changed = settings.start_at_login != new_start_at_login
+    if start_at_login_changed:
+        settings.start_at_login = new_start_at_login
+        from src import startup_manager
+
+        if new_start_at_login:
+            if not startup_manager.enable_launch_at_login():
+                settings.start_at_login = False
+                rumps.alert(
+                    title="Launch at login unavailable",
+                    message=(
+                        "Autostart requires Malinche to be installed as an "
+                        "app bundle (drag Malinche.app to /Applications)."
+                    ),
+                    ok="OK",
+                )
+        else:
+            startup_manager.disable_launch_at_login()
+
+    return basic_changed or api_key_changed or start_at_login_changed
 
 
 # ---------------------------------------------------------------------------

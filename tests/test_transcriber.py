@@ -665,7 +665,7 @@ def test_process_recorder_with_files(transcriber, mock_recorder_path):
         with patch.object(
             transcriber,
             "find_pending_audio_files",
-            return_value=[mock_recorder_path / "Music" / "recording1.mp3"],
+            return_value=[(mock_recorder_path / "Music" / "recording1.mp3", "fp-1")],
         ):
             with patch.object(transcriber, 'get_last_sync_time', 
                              return_value=datetime.now() - timedelta(days=1)):
@@ -751,14 +751,14 @@ def test_process_recorder_staging_integration(transcriber, tmp_path, monkeypatch
         with patch.object(
             transcriber,
             "find_pending_audio_files",
-            return_value=[audio_file],
+            return_value=[(audio_file, "fp-test")],
         ):
-            with patch.object(transcriber, 'get_last_sync_time', 
+            with patch.object(transcriber, 'get_last_sync_time',
                              return_value=datetime.now() - timedelta(days=1)):
                 with patch.object(transcriber, 'transcribe_file', return_value=True) as mock_transcribe:
                     with patch.object(transcriber, 'save_sync_time'):
                         transcriber.process_recorder()
-                        
+
                         # Verify transcribe_file was called with staged path
                         assert mock_transcribe.called
                         call_args = mock_transcribe.call_args[0][0]
@@ -785,16 +785,16 @@ def test_process_recorder_batch_failure_handling(transcriber, tmp_path, monkeypa
         with patch.object(
             transcriber,
             "find_pending_audio_files",
-            return_value=[audio_file1, audio_file2],
+            return_value=[(audio_file1, "fp-1"), (audio_file2, "fp-2")],
         ):
-            with patch.object(transcriber, 'get_last_sync_time', 
+            with patch.object(transcriber, 'get_last_sync_time',
                              return_value=datetime.now() - timedelta(days=1)):
                 # First succeeds, second fails
-                with patch.object(transcriber, 'transcribe_file', 
+                with patch.object(transcriber, 'transcribe_file',
                                 side_effect=[True, False]) as mock_transcribe:
                     with patch.object(transcriber, 'save_sync_time') as mock_save:
                         transcriber.process_recorder()
-                        
+
                         # Should NOT save sync time because one file failed
                         mock_save.assert_not_called()
 
@@ -818,15 +818,15 @@ def test_process_recorder_batch_success_updates_sync(transcriber, tmp_path, monk
         with patch.object(
             transcriber,
             "find_pending_audio_files",
-            return_value=[audio_file1, audio_file2],
+            return_value=[(audio_file1, "fp-1"), (audio_file2, "fp-2")],
         ):
-            with patch.object(transcriber, 'get_last_sync_time', 
+            with patch.object(transcriber, 'get_last_sync_time',
                              return_value=datetime.now() - timedelta(days=1)):
                 # Both succeed
                 with patch.object(transcriber, 'transcribe_file', return_value=True):
                     with patch.object(transcriber, 'save_sync_time') as mock_save:
                         transcriber.process_recorder()
-                        
+
                         # Should save sync time because all files succeeded
                         mock_save.assert_called_once()
 
@@ -869,7 +869,7 @@ def test_process_recorder_skips_files_with_existing_markdown(
         with patch.object(
             transcriber,
             "find_pending_audio_files",
-            return_value=[processed_file, new_file],
+            return_value=[(processed_file, "fp-processed"), (new_file, "fp-new")],
         ):
             with patch.object(
                 transcriber, "get_last_sync_time", return_value=datetime.now() - timedelta(days=1)
@@ -1148,7 +1148,7 @@ def test_process_recorder_sends_notification_when_new_files_found(
         with patch.object(
             transcriber,
             "find_pending_audio_files",
-            return_value=[mock_recorder_path / "Music" / "recording1.mp3"],
+            return_value=[(mock_recorder_path / "Music" / "recording1.mp3", "fp-1")],
         ):
             with patch.object(transcriber, 'get_last_sync_time', 
                              return_value=datetime.now() - timedelta(days=1)):  # Past date = new files
@@ -1221,7 +1221,7 @@ def test_find_pending_audio_files_returns_files_without_fingerprint(
         )
         pending = transcriber.find_pending_audio_files(recorder)
 
-    assert pending == [unknown]
+    assert pending == [(unknown, "fp-unknown")]
 
 
 def test_process_recorder_sets_recorder_idle_when_all_transcribed(transcriber, tmp_path):
@@ -1256,8 +1256,9 @@ def test_process_recorder_sets_recorder_pending_when_files_missing(
     for path in pending_files:
         path.write_bytes(b"x")
 
+    pending_tuples = [(p, f"fp-{p.name}") for p in pending_files]
     with patch.object(transcriber, "find_recorders", return_value=[recorder]), patch.object(
-        transcriber, "find_pending_audio_files", return_value=pending_files
+        transcriber, "find_pending_audio_files", return_value=pending_tuples
     ), patch.object(transcriber, "find_audio_files", return_value=[]):
         updates = []
         transcriber.set_state_updater(

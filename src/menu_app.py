@@ -1098,6 +1098,13 @@ def main():
         sys.exit(1)
 
     try:
+        from src import startup_manager
+
+        try:
+            startup_manager.sync_with_settings(UserSettings.load())
+        except Exception as sync_err:  # noqa: BLE001
+            logger.warning("Launch-at-login sync failed: %s", sync_err)
+
         app = MalincheMenuApp()
         app.run()
     except KeyboardInterrupt:

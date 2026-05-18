@@ -8,7 +8,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional
+from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
 from src.config import config as default_config
 from src.config.config import Config
@@ -263,6 +263,8 @@ class Transcriber:
         self._ai_disabled_reason: Optional[str] = None
         self.ai_billing_callback: Optional[Callable[[Exception], None]] = None
         self._session_failed_fingerprints: set = set()
+        self._coreml_disabled_in_session: bool = False
+        self._last_run_was_transient_failure: bool = False
         self.vault_index = VaultIndex(self.config.TRANSCRIBE_DIR)
         self.vault_index.load()
         self._run_index_migration_if_needed()
@@ -561,31 +563,69 @@ class Transcriber:
         return new_files
 
     def _iter_audio_files(self, recorder_path: Path) -> Iterator[Path]:
-        """Yield audio files from recorder up to configured max depth."""
+        """Yield audio files from recorder up to configured max depth.
+
+        Per-item OSErrors (e.g. fskit returning EINVAL/ENXIO during FAT32
+        warm-up on macOS Tahoe) are logged and skipped — one flaky file
+        must not abort the whole scan.
+        """
         from src.config.defaults import defaults
 
         max_depth = defaults.MAX_SCAN_DEPTH
-        for item in recorder_path.rglob("*"):
-            if not item.is_file():
-                continue
-            if item.name.startswith("._") or item.name == ".DS_Store":
-                continue
-            if item.suffix.lower() not in self.config.AUDIO_EXTENSIONS:
+        try:
+            iterator = recorder_path.rglob("*")
+        except OSError as error:
+            logger.error("Cannot start scan of %s: %s", recorder_path, error)
+            return
+        while True:
+            try:
+                item = next(iterator)
+            except StopIteration:
+                return
+            except OSError as error:
+                logger.warning(
+                    "Skipping unreadable entry during scan of %s: %s",
+                    recorder_path,
+                    error,
+                )
                 continue
             try:
+                if not item.is_file():
+                    continue
+                if item.name.startswith("._") or item.name == ".DS_Store":
+                    continue
+                if item.suffix.lower() not in self.config.AUDIO_EXTENSIONS:
+                    continue
                 relative = item.relative_to(recorder_path)
                 dir_depth = len(relative.parts) - 1
                 if dir_depth > max_depth:
                     continue
+            except OSError as error:
+                logger.warning("Skipping unreadable file %s: %s", item, error)
+                continue
             except ValueError:
                 continue
             yield item
 
-    def find_pending_audio_files(self, recorder_path: Path) -> List[Path]:
-        """Return recorder audio files with no fingerprint in vault index."""
-        pending_files: List[Path] = []
+    def find_pending_audio_files(
+        self, recorder_path: Path
+    ) -> List[Tuple[Path, str]]:
+        """Return recorder audio files (with fingerprint) missing from vault index."""
+        pending_files: List[Tuple[Path, str]] = []
         try:
             for audio_file in self._iter_audio_files(recorder_path):
+                try:
+                    size = audio_file.stat().st_size
+                except OSError as error:
+                    logger.warning("Cannot stat %s: %s", audio_file, error)
+                    continue
+                if self.vault_index.lookup_by_filename_size(
+                    audio_file.name, size
+                ) is not None:
+                    logger.debug(
+                        "✓ Skip (filename+size match): %s", audio_file.name
+                    )
+                    continue
                 try:
                     fingerprint = compute_fingerprint(audio_file)
                 except OSError as error:
@@ -597,10 +637,18 @@ class Transcriber:
                     )
                     continue
                 if self.vault_index.lookup(fingerprint) is None:
-                    pending_files.append(audio_file)
+                    pending_files.append((audio_file, fingerprint))
         except OSError as error:
-            logger.error("Error scanning pending files on %s: %s", recorder_path, error)
-            return []
+            # Volume-level error (e.g. recorder unmounted mid-scan). Keep
+            # what was collected so far — a partial result is far better
+            # than losing N successfully-scanned files because file N+1
+            # tripped fskit. Next periodic check will pick up the rest.
+            logger.warning(
+                "Partial scan on %s after I/O error (%d files kept): %s",
+                recorder_path,
+                len(pending_files),
+                error,
+            )
         return pending_files
     
     def _stage_audio_file(self, audio_file: Path) -> Optional[Path]:
@@ -679,6 +727,9 @@ class Transcriber:
         Returns:
             CompletedProcess from subprocess.run
         """
+        if use_coreml and self._coreml_disabled_in_session:
+            use_coreml = False
+
         # Build whisper.cpp command
         model_path = self.config.WHISPER_CPP_MODELS_DIR / f"ggml-{self.config.WHISPER_MODEL}.bin"
         output_base = self.config.TRANSCRIBE_DIR / audio_file.stem
@@ -787,7 +838,7 @@ class Transcriber:
     @staticmethod
     def _wait_for_output_file(
         path: Path,
-        timeout: float = 60.0,
+        timeout: float = 120.0,
         interval: float = 0.5,
     ) -> bool:
         """Czekaj aż plik będzie widoczny w filesystem i ma rozmiar > 0.
@@ -795,8 +846,9 @@ class Transcriber:
         whisper-cli zapisuje TXT do TRANSCRIBE_DIR — gdy ten katalog leży
         w iCloud Drive (np. ~/Library/Mobile Documents/iCloud~md~obsidian/...),
         File Provider chwilowo zwraca False z ``Path.exists()`` mimo że
-        plik fizycznie istnieje. Empirycznie obserwowane lag-i sięgają
-        kilkudziesięciu sekund. Polling do 60s pokrywa większość przypadków.
+        plik fizycznie istnieje. Empirycznie obserwowane lag-i Apple
+        File Provider sięgają ~90 s przy świeżej synchronizacji, więc
+        polling do 120 s pokrywa wszystkie obserwowane przypadki.
 
         Sprawdzamy też że plik ma >0 bajtów — żeby nie wracać True dla
         placeholder który CloudKit utworzył przed dosynchronizowaniem
@@ -819,13 +871,19 @@ class Transcriber:
 
     def _run_macwhisper(self, audio_file: Path) -> Optional[Path]:
         """Run whisper.cpp transcription and return path to TXT file.
-        
+
         Args:
             audio_file: Path to the audio file to transcribe
-            
+
         Returns:
-            Path to created TXT file, or None if transcription failed
+            Path to created TXT file, or None if transcription failed.
+            When returning None, ``self._last_run_was_transient_failure``
+            is set: True for transient cases (whisper rc=0 but output
+            file never appeared — usually iCloud sync lag), False for
+            permanent failures (rc≠0, timeout, exception). Callers use
+            this to decide whether to retry on the next cycle.
         """
+        self._last_run_was_transient_failure = False
         if not self.whisper_available:
             logger.error("whisper.cpp not available, cannot transcribe")
             return None
@@ -876,6 +934,13 @@ class Transcriber:
                 )
                 if result.stderr:
                     logger.debug(f"  Error details: {result.stderr[:500]}")
+
+                if not self._coreml_disabled_in_session:
+                    self._coreml_disabled_in_session = True
+                    logger.info(
+                        "Core ML disabled for the rest of this session "
+                        "(Metal failed once)"
+                    )
 
                 logger.info("🔄 Retrying transcription with CPU only")
                 result = self._run_whisper_transcription(audio_file, use_coreml=False)
@@ -934,10 +999,31 @@ class Transcriber:
                 )
                 logger.error(f"  Searched directory: {output_dir}")
                 logger.error(f"  Files found matching pattern: {len(created_files)}")
+                try:
+                    recent_cutoff = time.time() - 60.0
+                    recent = []
+                    for entry in output_dir.iterdir():
+                        try:
+                            if entry.stat().st_mtime >= recent_cutoff:
+                                recent.append(entry.name)
+                        except OSError:
+                            continue
+                    if recent:
+                        logger.error(
+                            "  Files in output_dir modified in last 60 s "
+                            "(possible different basename): %s",
+                            recent,
+                        )
+                except OSError as scan_err:
+                    logger.error(
+                        "  Could not list output_dir for diagnostics: %s",
+                        scan_err,
+                    )
                 if result.stderr:
                     logger.error(f"  stderr: {result.stderr}")
                 if result.stdout:
-                    logger.debug(f"  stdout: {result.stdout}")
+                    logger.info(f"  stdout: {result.stdout}")
+                self._last_run_was_transient_failure = True
                 return None
         
         except subprocess.TimeoutExpired:
@@ -1320,6 +1406,10 @@ Brak podsumowania AI. Możliwe przyczyny:
         except ValueError:
             version = 1
 
+        try:
+            audio_size = audio_file.stat().st_size
+        except OSError:
+            audio_size = 0
         self.vault_index.add(
             fingerprint,
             IndexEntry(
@@ -1327,6 +1417,7 @@ Brak podsumowania AI. Możliwe przyczyny:
                 source_filename=audio_file.name,
                 source_volume=fm.get("source_volume", audio_file.parent.name),
                 markdown_path=markdown_path.name,
+                source_size=audio_size,
                 versions=[
                     {
                         "version": version,
@@ -1513,12 +1604,20 @@ Brak podsumowania AI. Możliwe przyczyny:
         transcript_path = self._run_macwhisper(audio_file)
 
         if transcript_path is None:
-            self._session_failed_fingerprints.add(fingerprint)
-            logger.warning(
-                "Marked %s as failed for this session (fingerprint: %s)",
-                audio_file.name,
-                fingerprint,
-            )
+            if self._last_run_was_transient_failure:
+                logger.info(
+                    "Transient failure for %s — will retry on next cycle "
+                    "(fingerprint: %s)",
+                    audio_file.name,
+                    fingerprint,
+                )
+            else:
+                self._session_failed_fingerprints.add(fingerprint)
+                logger.warning(
+                    "Marked %s as failed for this session (fingerprint: %s)",
+                    audio_file.name,
+                    fingerprint,
+                )
             return False
         
         # Post-process: generate summary and create markdown
@@ -1581,6 +1680,10 @@ Brak podsumowania AI. Możliwe przyczyny:
         if existing_entry:
             self.vault_index.add_version(fingerprint, version_info)
         else:
+            try:
+                audio_size = audio_file.stat().st_size
+            except OSError:
+                audio_size = 0
             self.vault_index.add(
                 fingerprint,
                 IndexEntry(
@@ -1588,6 +1691,7 @@ Brak podsumowania AI. Możliwe przyczyny:
                     source_filename=audio_file.name,
                     source_volume=audio_file.parent.name,
                     markdown_path=md_path.name,
+                    source_size=audio_size,
                     versions=[version_info],
                 ),
             )
@@ -1600,7 +1704,7 @@ Brak podsumowania AI. Możliwe przyczyny:
         """
         lock = ProcessLock(self.config.PROCESS_LOCK_FILE)
         if not lock.acquire():
-            logger.info(
+            logger.debug(
                 "⛔️ Skipping process_recorder because another instance holds lock %s",
                 self.config.PROCESS_LOCK_FILE,
             )
@@ -1630,7 +1734,7 @@ Brak podsumowania AI. Możliwe przyczyny:
                     )
                     processed_s = 0
                     processed_f = 0
-                    for staged_file in staged_pending:
+                    for staged_file, _fingerprint in staged_pending:
                         logger.info(f"Processing: {staged_file.name}")
                         if self.transcribe_file(staged_file):
                             processed_s += 1
@@ -1663,10 +1767,29 @@ Brak podsumowania AI. Możliwe przyczyny:
                 f"✓ Recorder(s) detected: {[r.name for r in recorders]}"
             )
 
+            # Recorder volume may have unmounted between find_recorders() and now
+            # (LS-P1 auto-sleep, USB drop, etc). Drop any that disappeared.
+            live_recorders = [r for r in recorders if r.exists()]
+            if not live_recorders:
+                logger.warning(
+                    "⚠️  Recorder(s) disappeared before scan could start "
+                    "(volume unmounted?): %s",
+                    [r.name for r in recorders],
+                )
+                self.recorder_monitoring = False
+                self.recorder_was_notified = False
+                self._update_state(
+                    AppStatus.IDLE,
+                    recorder_name=None,
+                    pending_count=None,
+                )
+                return
+            recorders = live_recorders
+
             self.recorder_monitoring = True
             recorder_names = ", ".join(r.name for r in recorders)
 
-            pending_files: List[Path] = []
+            pending_files: List[Tuple[Path, str]] = []
             for recorder in recorders:
                 pending_files.extend(self.find_pending_audio_files(recorder))
             pending_count = len(pending_files)
@@ -1710,11 +1833,18 @@ Brak podsumowania AI. Możliwe przyczyny:
 
             # Process each pending file (source of truth: missing fingerprint).
             if pending_files:
-                for recorder_file in pending_files:
+                for recorder_file, fingerprint in pending_files:
+                    if not recorder_file.exists():
+                        logger.warning(
+                            "🪪 Source file disappeared "
+                            "(volume unmounted?), skipping: %s",
+                            recorder_file.name,
+                        )
+                        processed_failed += 1
+                        continue
                     logger.info(f"Processing: {recorder_file.name}")
-                    
+
                     existing_markdown = self._find_existing_markdown_for_audio(recorder_file)
-                    fingerprint = compute_fingerprint(recorder_file)
                     if self.vault_index.lookup(fingerprint):
                         logger.info(
                             "↪️ Skipping already transcribed file (fingerprint): %s",

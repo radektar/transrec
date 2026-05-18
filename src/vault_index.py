@@ -23,6 +23,7 @@ class IndexEntry:
     source_volume: str
     markdown_path: str
     versions: list[dict[str, Any]] = field(default_factory=list)
+    source_size: int = 0
 
 
 class VaultIndex:
@@ -55,12 +56,40 @@ class VaultIndex:
         row = self._data.get("entries", {}).get(fingerprint)
         if not row:
             return None
+        return self._row_to_entry(fingerprint, row)
+
+    def lookup_by_filename_size(
+        self, filename: str, size: int
+    ) -> Optional[IndexEntry]:
+        """Cheap metadata-only lookup: match by (source_filename, source_size).
+
+        Used as a fast pre-filter before computing the SHA fingerprint —
+        on a recorder with 100+ known files, this avoids 100+ MB of disk
+        reads. A match is only returned when ``source_size > 0`` in the
+        stored entry; entries with ``source_size == 0`` are pre-migration
+        and treated as unknown (forces full fingerprint, which will then
+        rewrite the entry with the correct size).
+        """
+        if size <= 0:
+            return None
+        for fp, row in self._data.get("entries", {}).items():
+            if row.get("source_filename") != filename:
+                continue
+            stored = int(row.get("source_size", 0) or 0)
+            if stored == 0 or stored != size:
+                continue
+            return self._row_to_entry(fp, row)
+        return None
+
+    @staticmethod
+    def _row_to_entry(fingerprint: str, row: Dict[str, Any]) -> IndexEntry:
         return IndexEntry(
             fingerprint=row.get("fingerprint", fingerprint),
             source_filename=row.get("source_filename", ""),
             source_volume=row.get("source_volume", ""),
             markdown_path=row.get("markdown_path", ""),
             versions=list(row.get("versions", [])),
+            source_size=int(row.get("source_size", 0) or 0),
         )
 
     def entry_count(self) -> int:
@@ -70,12 +99,16 @@ class VaultIndex:
     def add(self, fingerprint: str, entry: IndexEntry) -> None:
         """Add or replace entry in index."""
         with self._locked_reload():
-            self._data.setdefault("entries", {})[fingerprint] = {
+            existing = self._data.setdefault("entries", {}).get(fingerprint, {})
+            stored_size = int(existing.get("source_size", 0) or 0)
+            size = entry.source_size if entry.source_size > 0 else stored_size
+            self._data["entries"][fingerprint] = {
                 "fingerprint": entry.fingerprint,
                 "source_filename": entry.source_filename,
                 "source_volume": entry.source_volume,
                 "markdown_path": entry.markdown_path,
                 "versions": list(entry.versions),
+                "source_size": size,
             }
             self._save()
 
